@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { Copy, Download, Share2, Trash2, Plus, Play } from "lucide-react";
+import { Copy, Download, Share2, Trash2, Plus, Play, ShieldCheck, UserRound, ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, Empty, Input, Label, SectionTitle, Select } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
@@ -327,10 +327,18 @@ function TeamsTab({
 
         {teams.map((t, index) => {
           const s = squadStats(players, t.id);
+          // Team-specific captain entry URL. The existing live route receives the
+          // team id through `captain_team`; captain registration/permission handling
+          // must be wired in the register/live route and database policies.
           const captainLink =
             typeof window !== "undefined"
               ? `${window.location.origin}/live/${tournamentId}?captain_team=${encodeURIComponent(t.id)}`
               : `/live/${tournamentId}?captain_team=${encodeURIComponent(t.id)}`;
+
+          const captainRegistrationLink =
+            typeof window !== "undefined"
+              ? `${window.location.origin}/register/${tournamentId}?captain_team=${encodeURIComponent(t.id)}&role=captain`
+              : `/register/${tournamentId}?captain_team=${encodeURIComponent(t.id)}&role=captain`;
 
           return (
             <Card key={t.id} className="overflow-hidden">
@@ -364,12 +372,31 @@ function TeamsTab({
                   <Button
                     variant="ghost"
                     onClick={() => {
-                      void navigator.clipboard.writeText(captainLink);
-                      toast.success(`Captain link copied for ${t.name}`);
+                      void navigator.clipboard.writeText(captainRegistrationLink);
+                      toast.success(`Captain registration link copied for ${t.name}`);
                     }}
                   >
-                    <Copy className="size-4" /> Captain Link
+                    <UserRound className="size-4" /> Captain Register
                   </Button>
+
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(captainLink);
+                      toast.success(`Captain auction link copied for ${t.name}`);
+                    }}
+                  >
+                    <ShieldCheck className="size-4" /> Captain Auction
+                  </Button>
+
+                  <a
+                    href={captainRegistrationLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold"
+                  >
+                    <ExternalLink className="size-4" /> Open Register
+                  </a>
 
                   <a
                     href={`https://wa.me/?text=${encodeURIComponent(
@@ -395,11 +422,19 @@ function TeamsTab({
                 </div>
               </div>
 
-              <div className="mt-3 rounded-xl border border-border bg-surface-2 px-3 py-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Captain invite link
-                </p>
-                <p className="mt-1 break-all text-xs text-muted-foreground">{captainLink}</p>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary">
+                    <UserRound className="size-3.5" /> Captain registration link
+                  </div>
+                  <p className="mt-1 break-all text-xs text-muted-foreground">{captainRegistrationLink}</p>
+                </div>
+                <div className="rounded-xl border border-accent/20 bg-accent/5 px-3 py-2">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-accent">
+                    <ShieldCheck className="size-3.5" /> Captain auction link
+                  </div>
+                  <p className="mt-1 break-all text-xs text-muted-foreground">{captainLink}</p>
+                </div>
               </div>
             </Card>
           );
