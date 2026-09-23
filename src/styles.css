@@ -1,0 +1,122 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --radius: 0.85rem;
+  --background: oklch(0.16 0.03 295);
+  --foreground: oklch(0.97 0.01 290);
+  --surface: oklch(0.21 0.035 295);
+  --surface-2: oklch(0.25 0.04 295);
+  --card: oklch(0.21 0.035 295);
+  --card-foreground: oklch(0.97 0.01 290);
+  --popover: oklch(0.21 0.035 295);
+  --popover-foreground: oklch(0.97 0.01 290);
+  --primary: oklch(0.62 0.23 302);
+  --primary-foreground: oklch(0.99 0.005 300);
+  --secondary: oklch(0.28 0.045 295);
+  --secondary-foreground: oklch(0.97 0.01 290);
+  --muted: oklch(0.28 0.04 295);
+  --muted-foreground: oklch(0.72 0.03 290);
+  --accent: oklch(0.78 0.21 152);
+  --accent-foreground: oklch(0.18 0.05 160);
+  --destructive: oklch(0.63 0.24 22);
+  --destructive-foreground: oklch(0.98 0.01 20);
+  --success: oklch(0.75 0.2 150);
+  --success-foreground: oklch(0.17 0.05 160);
+  --warning: oklch(0.83 0.17 85);
+  --warning-foreground: oklch(0.2 0.05 80);
+  --border: oklch(0.32 0.04 295);
+  --input: oklch(0.32 0.04 295);
+  --ring: oklch(0.62 0.23 302);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    background-image:
+      radial-gradient(900px 500px at 12% -10%, oklch(0.62 0.23 302 / 0.16), transparent 70%),
+      radial-gradient(800px 500px at 95% 0%, oklch(0.78 0.21 152 / 0.1), transparent 70%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+}
+
+@utility card-surface {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+}
+
+@utility glow-primary {
+  box-shadow: 0 0 0 2px var(--color-primary), 0 0 34px oklch(0.62 0.23 302 / 0.55);
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(100deg, var(--color-primary), var(--color-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@utility animate-pop-in {
+  animation: pop-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+@keyframes slide-down-in {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@utility animate-bid-in {
+  animation: slide-down-in 0.3s ease-out;
+}
