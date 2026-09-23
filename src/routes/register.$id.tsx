@@ -2,7 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, ShieldCheck, Upload, UserRound } from "lucide-react";
+import {
+  CheckCircle2,
+  ShieldCheck,
+  Upload,
+  UserRound,
+  AlertCircle,
+} from "lucide-react";
+
 import { Button, Card, Input, Label, Select } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadFile } from "@/lib/upload";
@@ -10,11 +17,13 @@ import { uploadFile } from "@/lib/upload";
 export const Route = createFileRoute("/register/$id")({
   head: () => ({
     meta: [
-      { title: "Player Registration — Cricket Auction Pro" },
+      {
+        title: "Player Registration — Cricket Auction Pro",
+      },
       {
         name: "description",
         content:
-          "Register as a player for this cricket auction tournament. Your player card will be added automatically.",
+          "Register as a player for this cricket auction tournament.",
       },
       {
         property: "og:title",
@@ -22,12 +31,20 @@ export const Route = createFileRoute("/register/$id")({
       },
       {
         property: "og:description",
-        content: "Register and automatically enter the cricket auction player pool.",
+        content:
+          "Register and automatically enter the cricket auction player pool.",
       },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      {
+        property: "og:type",
+        content: "website",
+      },
+      {
+        name: "twitter:card",
+        content: "summary_large_image",
+      },
     ],
   }),
+
   component: RegisterPage,
 });
 
@@ -37,7 +54,9 @@ function RegisterPage() {
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
+
   const [photo, setPhoto] = useState<string | null>(null);
+
   const [registeredName, setRegisteredName] = useState("");
   const [playerNumber, setPlayerNumber] = useState<number | null>(null);
 
@@ -51,12 +70,17 @@ function RegisterPage() {
     previous_team: "",
   });
 
-  /* -------------------------------------------------------
+  /* =========================================================
      TOURNAMENT
-  ------------------------------------------------------- */
+  ========================================================= */
 
-  const { data: t, isLoading: tournamentLoading } = useQuery({
-    queryKey: ["reg-tournament", id],
+  const {
+    data: tournament,
+    isLoading: tournamentLoading,
+    error: tournamentError,
+  } = useQuery({
+    queryKey: ["register-tournament", id],
+
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tournaments")
@@ -72,12 +96,16 @@ function RegisterPage() {
     },
   });
 
-  /* -------------------------------------------------------
+  /* =========================================================
      PLAYER COUNT
-  ------------------------------------------------------- */
+  ========================================================= */
 
-  const { data: count, refetch: refetchCount } = useQuery({
-    queryKey: ["reg-count", id],
+  const {
+    data: playerCount,
+    refetch: refetchPlayerCount,
+  } = useQuery({
+    queryKey: ["register-player-count", id],
+
     queryFn: async () => {
       const { count, error } = await supabase
         .from("players")
@@ -93,25 +121,32 @@ function RegisterPage() {
     },
   });
 
-  const categories = (t?.categories ?? []) as unknown as string[];
+  const categories =
+    (tournament?.categories as unknown as string[] | null) ?? [];
 
-  const roles = categories.length
-    ? categories
-    : ["Batsman", "Bowler", "All-Rounder", "Wicketkeeper"];
+  const roles =
+    categories.length > 0
+      ? categories
+      : [
+          "Batsman",
+          "Bowler",
+          "All-Rounder",
+          "Wicketkeeper",
+        ];
 
-  /* -------------------------------------------------------
+  /* =========================================================
      PHOTO UPLOAD
-  ------------------------------------------------------- */
+  ========================================================= */
 
   async function handlePhotoUpload(
-    e: React.ChangeEvent<HTMLInputElement>,
+    event: React.ChangeEvent<HTMLInputElement>,
   ) {
-    const file = e.target.files?.[0];
+    const file = event.target.files?.[0];
 
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file.");
+      toast.error("Please select a valid image.");
       return;
     }
 
@@ -125,25 +160,43 @@ function RegisterPage() {
     try {
       const uploadedUrl = await uploadFile(file, "players");
 
+      if (!uploadedUrl) {
+        throw new Error("Photo upload failed.");
+      }
+
       setPhoto(uploadedUrl);
 
-      toast.success("Photo uploaded successfully");
-    } catch (err) {
+      toast.success("Photo uploaded successfully.");
+    } catch (error) {
+      console.error("PHOTO UPLOAD ERROR:", error);
+
       toast.error(
-        err instanceof Error ? err.message : "Photo upload failed",
+        error instanceof Error
+          ? error.message
+          : "Photo upload failed.",
       );
     } finally {
       setPhotoUploading(false);
     }
   }
 
-  /* -------------------------------------------------------
-     SUBMIT REGISTRATION
-  ------------------------------------------------------- */
+  /* =========================================================
+     NORMALIZE MOBILE
+  ========================================================= */
+
+  function normalizeMobile(value: string) {
+    return value.replace(/\D/g, "").slice(0, 10);
+  }
+
+  /* =========================================================
+     SUBMIT PLAYER
+  ========================================================= */
 
   async function submit() {
+    if (busy) return;
+
     const name = form.name.trim();
-    const mobile = form.mobile.trim();
+    const mobile = normalizeMobile(form.mobile);
     const city = form.city.trim();
 
     if (!name) {
@@ -151,13 +204,8 @@ function RegisterPage() {
       return;
     }
 
-    if (!mobile) {
-      toast.error("Please enter your mobile number.");
-      return;
-    }
-
-    if (mobile.length < 10) {
-      toast.error("Please enter a valid mobile number.");
+    if (mobile.length !== 10) {
+      toast.error("Please enter a valid 10 digit mobile number.");
       return;
     }
 
@@ -166,102 +214,228 @@ function RegisterPage() {
       return;
     }
 
-    if (!t) {
+    if (!tournament) {
       toast.error("Tournament not found.");
       return;
     }
 
+    /*
+     * Prevent accidental double click / repeated submission
+     */
+    if (busy) return;
+
     setBusy(true);
 
     try {
-      /* ---------------------------------------------------
+      /* =====================================================
+         LOCAL REGISTRATION LOCK
+
+         Prevents the same browser from submitting the same
+         player twice by repeated clicks.
+      ===================================================== */
+
+      const lockKey =
+        `auction-registration:${id}:${mobile}`;
+
+      const existingLock =
+        window.localStorage.getItem(lockKey);
+
+      if (existingLock) {
+        toast.error(
+          "This mobile number has already been submitted from this device.",
+        );
+
+        setBusy(false);
+        return;
+      }
+
+      /* =====================================================
          DUPLICATE CHECK
-         Same mobile + same tournament = no duplicate player
-      --------------------------------------------------- */
 
-      const { data: existingPlayer, error: duplicateError } =
-        await supabase
-          .from("players")
-          .select("id,name,status")
-          .eq("tournament_id", id)
-          .eq("mobile", mobile)
-          .maybeSingle();
+         Same tournament + same mobile = one player only.
+      ===================================================== */
 
-      if (duplicateError) {
-        throw duplicateError;
+      const {
+        data: existingPlayer,
+        error: duplicateCheckError,
+      } = await supabase
+        .from("players")
+        .select("id,name,status,mobile")
+        .eq("tournament_id", id)
+        .eq("mobile", mobile)
+        .maybeSingle();
+
+      if (duplicateCheckError) {
+        console.error(
+          "DUPLICATE CHECK ERROR:",
+          duplicateCheckError,
+        );
+
+        throw new Error(
+          duplicateCheckError.message ||
+            "Unable to verify registration.",
+        );
       }
 
       if (existingPlayer) {
         toast.error(
           `This mobile number is already registered as ${existingPlayer.name}.`,
         );
+
         setBusy(false);
         return;
       }
 
-      /* ---------------------------------------------------
-         GET CURRENT PLAYER COUNT
-         Used only to show a player number after registration.
-      --------------------------------------------------- */
+      /*
+       * Set local lock immediately before insert.
+       * If insert fails, remove it again.
+       */
+      window.localStorage.setItem(
+        lockKey,
+        new Date().toISOString(),
+      );
 
-      const { count: currentCount, error: countError } =
-        await supabase
-          .from("players")
-          .select("id", {
-            count: "exact",
-            head: true,
-          })
-          .eq("tournament_id", id);
+      /* =====================================================
+         GET PLAYER NUMBER
+      ===================================================== */
+
+      const {
+        count: currentCount,
+        error: countError,
+      } = await supabase
+        .from("players")
+        .select("id", {
+          count: "exact",
+          head: true,
+        })
+        .eq("tournament_id", id);
 
       if (countError) {
-        throw countError;
+        window.localStorage.removeItem(lockKey);
+
+        throw new Error(
+          countError.message ||
+            "Unable to generate player number.",
+        );
       }
 
-      const nextNumber = (currentCount ?? 0) + 1;
+      const nextNumber =
+        (currentCount ?? 0) + 1;
 
-      /* ---------------------------------------------------
+      /* =====================================================
          CREATE PLAYER
 
-         IMPORTANT:
-         status = "available"
-
-         So player goes directly into auction pool.
+         Player directly enters auction pool.
          No owner approval required.
-      --------------------------------------------------- */
+      ===================================================== */
 
-      const { error: insertError } = await supabase
-        .from("players")
-        .insert({
-          tournament_id: id,
-          name,
-          role: form.role,
-          mobile,
-          city,
-          batting_style: form.batting_style.trim(),
-          bowling_style: form.bowling_style.trim(),
-          previous_team: form.previous_team.trim(),
-          photo_url: photo,
-          base_price: 0,
+      const { data: insertedPlayer, error: insertError } =
+        await supabase
+          .from("players")
+          .insert({
+            tournament_id: id,
 
-          // DIRECT AUCTION PLAYER
-          status: "available",
-        });
+            name,
+
+            role: form.role,
+
+            mobile,
+
+            city,
+
+            batting_style:
+              form.batting_style.trim(),
+
+            bowling_style:
+              form.bowling_style.trim(),
+
+            previous_team:
+              form.previous_team.trim(),
+
+            photo_url: photo,
+
+            /*
+             * Tournament base price logic can later
+             * calculate the actual base price.
+             */
+            base_price: 0,
+
+            /*
+             * IMPORTANT:
+             * Player immediately appears in auction.
+             */
+            status: "available",
+          })
+          .select("id,name")
+          .maybeSingle();
+
+      /* =====================================================
+         INSERT ERROR
+      ===================================================== */
 
       if (insertError) {
-        throw insertError;
+        console.error(
+          "PLAYER INSERT ERROR:",
+          insertError,
+        );
+
+        window.localStorage.removeItem(lockKey);
+
+        /*
+         * PostgreSQL duplicate key protection.
+         *
+         * If a unique constraint exists on
+         * tournament_id + mobile, this catches it.
+         */
+        if (
+          (insertError as { code?: string }).code ===
+          "23505"
+        ) {
+          toast.error(
+            "This mobile number is already registered for this tournament.",
+          );
+
+          return;
+        }
+
+        throw new Error(
+          insertError.message ||
+            "Registration failed. Please try again.",
+        );
       }
 
+      if (!insertedPlayer) {
+        window.localStorage.removeItem(lockKey);
+
+        throw new Error(
+          "Player was not created. Please try again.",
+        );
+      }
+
+      /* =====================================================
+         SUCCESS
+      ===================================================== */
+
       setRegisteredName(name);
+
       setPlayerNumber(nextNumber);
+
       setDone(true);
 
-      await refetchCount();
+      await refetchPlayerCount();
 
-      toast.success("Player added to auction successfully!");
-    } catch (err) {
+      toast.success(
+        "Player registered successfully!",
+      );
+    } catch (error) {
+      console.error(
+        "REGISTRATION ERROR:",
+        error,
+      );
+
       toast.error(
-        err instanceof Error
-          ? err.message
+        error instanceof Error
+          ? error.message
           : "Registration failed. Please try again.",
       );
     } finally {
@@ -269,15 +443,16 @@ function RegisterPage() {
     }
   }
 
-  /* -------------------------------------------------------
+  /* =========================================================
      LOADING
-  ------------------------------------------------------- */
+  ========================================================= */
 
   if (tournamentLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="text-center">
-          <div className="mx-auto mb-3 size-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <div className="mx-auto mb-4 size-10 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+
           <p className="text-sm text-muted-foreground">
             Loading tournament…
           </p>
@@ -286,30 +461,64 @@ function RegisterPage() {
     );
   }
 
-  /* -------------------------------------------------------
-     TOURNAMENT NOT FOUND
-  ------------------------------------------------------- */
+  /* =========================================================
+     TOURNAMENT ERROR
+  ========================================================= */
 
-  if (!t) {
+  if (tournamentError) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md text-center">
-          <p className="text-2xl">🏏</p>
-          <h1 className="mt-3 font-display text-2xl font-bold">
-            Tournament not found
+        <Card className="w-full max-w-md p-8 text-center">
+          <div className="mx-auto grid size-16 place-items-center rounded-full bg-destructive/10">
+            <AlertCircle className="size-8 text-destructive" />
+          </div>
+
+          <h1 className="mt-5 font-display text-2xl font-black">
+            Registration unavailable
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This registration link may be invalid or the tournament may have
-            been removed.
+
+          <p className="mt-3 text-sm text-muted-foreground">
+            Unable to load this tournament.
+          </p>
+
+          <p className="mt-2 break-words text-xs text-destructive">
+            {tournamentError instanceof Error
+              ? tournamentError.message
+              : "Unknown error"}
           </p>
         </Card>
       </div>
     );
   }
 
-  /* -------------------------------------------------------
+  /* =========================================================
+     TOURNAMENT NOT FOUND
+  ========================================================= */
+
+  if (!tournament) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md p-8 text-center">
+          <div className="mx-auto grid size-16 place-items-center rounded-full bg-primary/10 text-3xl">
+            🏏
+          </div>
+
+          <h1 className="mt-5 font-display text-2xl font-black">
+            Tournament not found
+          </h1>
+
+          <p className="mt-3 text-sm text-muted-foreground">
+            This registration link may be invalid or
+            the tournament may have been removed.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  /* =========================================================
      SUCCESS SCREEN
-  ------------------------------------------------------- */
+  ========================================================= */
 
   if (done) {
     return (
@@ -317,12 +526,13 @@ function RegisterPage() {
         <div className="mx-auto max-w-lg">
           <Card className="overflow-hidden border-accent/30">
             <div className="bg-gradient-to-br from-accent/20 via-background to-primary/10 p-8 text-center">
+
               <div className="mx-auto grid size-20 place-items-center rounded-full bg-accent/15">
                 <CheckCircle2 className="size-11 text-accent" />
               </div>
 
               <p className="mt-5 text-xs font-bold uppercase tracking-[0.25em] text-accent">
-                Registration successful
+                Registration Successful
               </p>
 
               <h1 className="mt-2 font-display text-3xl font-black">
@@ -336,25 +546,40 @@ function RegisterPage() {
                   </span>
 
                   <span className="font-display text-3xl font-black text-accent">
-                    #{String(playerNumber).padStart(2, "0")}
+                    #
+                    {String(playerNumber).padStart(
+                      2,
+                      "0",
+                    )}
                   </span>
                 </div>
               )}
 
               <p className="mt-5 text-sm leading-6 text-muted-foreground">
-                Your player profile has been added directly to the auction
-                player pool.
+                Your player profile has been successfully
+                added to the auction player pool.
               </p>
 
               <div className="mt-6 rounded-xl border border-accent/20 bg-accent/5 p-4">
                 <div className="flex items-center justify-center gap-2 text-sm font-bold text-accent">
                   <ShieldCheck className="size-4" />
+
                   Player is ready for auction
                 </div>
 
-                <p className="mt-1 text-xs text-muted-foreground">
-                  The auctioneer can now see your player card when the auction
-                  starts.
+                <p className="mt-2 text-xs text-muted-foreground">
+                  The auction owner can now see your
+                  player card when the auction starts.
+                </p>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-border bg-surface-2 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Tournament
+                </p>
+
+                <p className="mt-1 font-bold">
+                  {tournament.name}
                 </p>
               </div>
             </div>
@@ -364,9 +589,9 @@ function RegisterPage() {
     );
   }
 
-  /* -------------------------------------------------------
+  /* =========================================================
      REGISTRATION FORM
-  ------------------------------------------------------- */
+  ========================================================= */
 
   return (
     <div className="min-h-screen bg-background px-4 py-8">
@@ -375,9 +600,10 @@ function RegisterPage() {
         {/* HEADER */}
 
         <div className="mb-6 text-center">
-          {t.banner_url && (
+
+          {tournament.banner_url && (
             <img
-              src={t.banner_url}
+              src={tournament.banner_url}
               alt=""
               className="mb-5 h-40 w-full rounded-2xl object-cover"
             />
@@ -392,32 +618,34 @@ function RegisterPage() {
           </p>
 
           <h1 className="mt-2 font-display text-3xl font-black md:text-4xl">
-            {t.name}
+            {tournament.name}
           </h1>
 
           <p className="mt-2 text-sm text-muted-foreground">
-            {t.venue ?? "Venue TBA"} ·{" "}
-            {t.tournament_type === "turf"
+            {tournament.venue ?? "Venue TBA"} ·{" "}
+            {tournament.tournament_type ===
+            "turf"
               ? "Turf Tournament"
               : "Open Ground Tournament"}
           </p>
 
           <div className="mt-4 inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-4 py-2 text-xs font-bold text-accent">
-            {count ?? 0} players registered
+            {playerCount ?? 0} players registered
           </div>
         </div>
 
         {/* FORM */}
 
         <Card className="overflow-hidden">
+
           <div className="mb-6">
             <h2 className="font-display text-xl font-bold">
-              Create your player card
+              Create Your Player Card
             </h2>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              Fill your details carefully. Your information will be used during
-              the live auction.
+              Fill your details carefully. Your information
+              will be used during the live auction.
             </p>
           </div>
 
@@ -431,10 +659,11 @@ function RegisterPage() {
               <Input
                 placeholder="Enter your full name"
                 value={form.name}
-                onChange={(e) =>
+                disabled={busy}
+                onChange={(event) =>
                   setForm({
                     ...form,
-                    name: e.target.value,
+                    name: event.target.value,
                   })
                 }
               />
@@ -450,10 +679,14 @@ function RegisterPage() {
                 inputMode="numeric"
                 placeholder="10 digit mobile number"
                 value={form.mobile}
-                onChange={(e) =>
+                disabled={busy}
+                maxLength={10}
+                onChange={(event) =>
                   setForm({
                     ...form,
-                    mobile: e.target.value.replace(/\D/g, "").slice(0, 10),
+                    mobile: normalizeMobile(
+                      event.target.value,
+                    ),
                   })
                 }
               />
@@ -466,15 +699,21 @@ function RegisterPage() {
 
               <Select
                 value={form.role}
-                onChange={(e) =>
+                disabled={busy}
+                onChange={(event) =>
                   setForm({
                     ...form,
-                    role: e.target.value,
+                    role: event.target.value,
                   })
                 }
               >
                 {roles.map((role) => (
-                  <option key={role}>{role}</option>
+                  <option
+                    key={role}
+                    value={role}
+                  >
+                    {role}
+                  </option>
                 ))}
               </Select>
             </div>
@@ -487,10 +726,11 @@ function RegisterPage() {
               <Input
                 placeholder="Your city"
                 value={form.city}
-                onChange={(e) =>
+                disabled={busy}
+                onChange={(event) =>
                   setForm({
                     ...form,
-                    city: e.target.value,
+                    city: event.target.value,
                   })
                 }
               />
@@ -504,10 +744,12 @@ function RegisterPage() {
               <Input
                 placeholder="e.g. Right Hand"
                 value={form.batting_style}
-                onChange={(e) =>
+                disabled={busy}
+                onChange={(event) =>
                   setForm({
                     ...form,
-                    batting_style: e.target.value,
+                    batting_style:
+                      event.target.value,
                   })
                 }
               />
@@ -521,10 +763,12 @@ function RegisterPage() {
               <Input
                 placeholder="e.g. Right Arm Fast"
                 value={form.bowling_style}
-                onChange={(e) =>
+                disabled={busy}
+                onChange={(event) =>
                   setForm({
                     ...form,
-                    bowling_style: e.target.value,
+                    bowling_style:
+                      event.target.value,
                   })
                 }
               />
@@ -538,10 +782,12 @@ function RegisterPage() {
               <Input
                 placeholder="Optional"
                 value={form.previous_team}
-                onChange={(e) =>
+                disabled={busy}
+                onChange={(event) =>
                   setForm({
                     ...form,
-                    previous_team: e.target.value,
+                    previous_team:
+                      event.target.value,
                   })
                 }
               />
@@ -550,9 +796,17 @@ function RegisterPage() {
             {/* PHOTO */}
 
             <div className="sm:col-span-2">
+
               <Label>Player photo *</Label>
 
-              <label className="mt-1 flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface-2 p-5 text-center transition hover:border-accent hover:bg-accent/5">
+              <label
+                className={`mt-1 flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface-2 p-5 text-center transition ${
+                  busy
+                    ? "cursor-not-allowed opacity-70"
+                    : "cursor-pointer hover:border-accent hover:bg-accent/5"
+                }`}
+              >
+
                 {photo ? (
                   <>
                     <img
@@ -587,9 +841,12 @@ function RegisterPage() {
 
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={busy || photoUploading}
                   className="hidden"
-                  onChange={(e) => void handlePhotoUpload(e)}
+                  onChange={(event) =>
+                    void handlePhotoUpload(event)
+                  }
                 />
               </label>
 
@@ -605,11 +862,17 @@ function RegisterPage() {
 
           <Button
             className="mt-6 w-full py-3 text-sm font-black"
-            disabled={busy || photoUploading}
+            disabled={
+              busy ||
+              photoUploading ||
+              form.mobile.length !== 10 ||
+              !form.name.trim() ||
+              !photo
+            }
             onClick={() => void submit()}
           >
             {busy
-              ? "Creating player card…"
+              ? "Registering player…"
               : photoUploading
                 ? "Uploading photo…"
                 : "Register for Auction"}
@@ -617,13 +880,16 @@ function RegisterPage() {
 
           <div className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
             <ShieldCheck className="size-4 text-accent" />
-            Your player details are securely submitted to this tournament.
+
+            Your player details are securely submitted
+            to this tournament.
           </div>
         </Card>
 
         {/* INFO */}
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
+
           <InfoCard
             title="Photo"
             text="Your photo appears on the auction player card."
@@ -636,17 +902,18 @@ function RegisterPage() {
 
           <InfoCard
             title="Live Auction"
-            text="The auctioneer can select your card during bidding."
+            text="The auction owner can select your card during bidding."
           />
+
         </div>
       </div>
     </div>
   );
 }
 
-/* -------------------------------------------------------
-   SMALL INFO CARD
-------------------------------------------------------- */
+/* =========================================================
+   INFO CARD
+========================================================= */
 
 function InfoCard({
   title,
@@ -657,7 +924,10 @@ function InfoCard({
 }) {
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <p className="text-sm font-bold">{title}</p>
+      <p className="text-sm font-bold">
+        {title}
+      </p>
+
       <p className="mt-1 text-xs leading-5 text-muted-foreground">
         {text}
       </p>

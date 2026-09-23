@@ -202,6 +202,13 @@ function LiveAuction() {
       p.status === "in_auction",
   ).length;
 
+  const soldPlayers = useMemo(
+    () => players
+      .filter((p) => p.status === "sold")
+      .map((p) => ({ player: p, team: teams.find((t) => t.id === p.sold_to_team_id) ?? null })),
+    [players, teams],
+  );
+
   const doneCount = players.filter(
     (p) =>
       p.status === "sold" ||
@@ -1591,6 +1598,60 @@ function LiveAuction() {
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* SOLD PLAYERS — VISIBLE, NEVER CLICKABLE */}
+      {/* ========================================================= */}
+
+      <Card>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg font-bold">Sold Players</h3>
+            <p className="text-xs text-muted-foreground">
+              Sold players stay visible for captains and are permanently locked.
+            </p>
+          </div>
+          <Badge tone="success">{soldPlayers.length} SOLD</Badge>
+        </div>
+
+        {soldPlayers.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-6 text-center">
+            <p className="text-sm font-semibold text-muted-foreground">No players sold yet.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {soldPlayers.map(({ player, team }) => (
+              <div key={player.id} className="relative overflow-hidden rounded-2xl border border-red-500/30 bg-red-500/5">
+                <div className="relative h-52 overflow-hidden bg-surface-2">
+                  {player.photo_url ? (
+                    <img src={player.photo_url} alt={player.name} className="size-full object-cover" />
+                  ) : (
+                    <div className="grid size-full place-items-center text-5xl">🏏</div>
+                  )}
+                  <div className="absolute left-3 top-3 rounded-full bg-red-600 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">SOLD</div>
+                </div>
+                <div className="p-3">
+                  <p className="truncate font-display text-base font-black">{player.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{player.role}{player.city ? ` · ${player.city}` : ""}</p>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Sold to</p>
+                      <p className="truncate text-sm font-bold text-primary">{team?.name ?? "Team"}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Price</p>
+                      <p className="font-display text-lg font-black text-accent">{formatMoney(player.sold_price ?? 0)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-lg bg-red-500/10 px-2.5 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-red-400">
+                    🔒 Bidding locked
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {/* ========================================================= */}
       {/* SUMMARY TABLE */}

@@ -303,41 +303,103 @@ function TeamsTab({
               }}
             />
           </div>
-          <Button disabled={busy || !form.name} onClick={() => void addTeam()} className="w-full">
-            <Plus className="size-4" /> Add team
+          <Button
+            disabled={busy || !form.name || teams.length >= 8}
+            onClick={() => void addTeam()}
+            className="w-full"
+          >
+            <Plus className="size-4" />
+            {teams.length >= 8 ? "8 Teams Added" : "Add team"}
           </Button>
         </div>
       </Card>
 
       <div className="space-y-3">
-        {teams.map((t) => {
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="font-bold">Teams & Captains</p>
+            <p className="text-xs text-muted-foreground">
+              {teams.length}/8 teams created. Captain links are generated per team.
+            </p>
+          </div>
+          <Badge tone={teams.length >= 8 ? "success" : "primary"}>{teams.length}/8</Badge>
+        </div>
+
+        {teams.map((t, index) => {
           const s = squadStats(players, t.id);
+          const captainLink =
+            typeof window !== "undefined"
+              ? `${window.location.origin}/live/${tournamentId}?captain_team=${encodeURIComponent(t.id)}`
+              : `/live/${tournamentId}?captain_team=${encodeURIComponent(t.id)}`;
+
           return (
-            <Card key={t.id}>
-              <div className="flex items-center gap-3">
-                <div className="size-11 overflow-hidden rounded-lg bg-surface-2">
-                  {t.logo_url ? <img src={t.logo_url} alt="" className="size-11 object-cover" /> : <div className="grid size-11 place-items-center">🛡️</div>}
+            <Card key={t.id} className="overflow-hidden">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-surface-2 ring-1 ring-border">
+                  {t.logo_url ? (
+                    <img src={t.logo_url} alt="" className="size-12 object-cover" />
+                  ) : (
+                    <span className="text-xl">🛡️</span>
+                  )}
                 </div>
+
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold">{t.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Captain {t.captain_name || "—"} · Owner {t.owner_name || "—"}
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[10px] font-black text-primary">
+                      TEAM {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <p className="truncate font-bold">{t.name}</p>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Captain: <span className="font-semibold text-foreground">{t.captain_name || "Not registered"}</span>
                   </p>
                 </div>
+
                 <div className="text-right text-xs">
                   <p className="font-bold text-accent">{formatMoney(t.remaining_budget)}</p>
                   <p className="text-muted-foreground">{s.count} players</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  onClick={async () => {
-                    if (!confirm(`Delete ${t.name}?`)) return;
-                    await supabase.from("teams").delete().eq("id", t.id);
-                    await reload();
-                  }}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(captainLink);
+                      toast.success(`Captain link copied for ${t.name}`);
+                    }}
+                  >
+                    <Copy className="size-4" /> Captain Link
+                  </Button>
+
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(
+                      `Captain registration / auction link for ${t.name}: ${captainLink}`,
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold"
+                  >
+                    <Share2 className="size-4" /> WhatsApp
+                  </a>
+
+                  <Button
+                    variant="ghost"
+                    onClick={async () => {
+                      if (!confirm(`Delete ${t.name}?`)) return;
+                      await supabase.from("teams").delete().eq("id", t.id);
+                      await reload();
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-border bg-surface-2 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Captain invite link
+                </p>
+                <p className="mt-1 break-all text-xs text-muted-foreground">{captainLink}</p>
               </div>
             </Card>
           );
