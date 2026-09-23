@@ -756,7 +756,6 @@ function ImportExport({
       cellDates: false,
       raw: false,
       dense: true,
-      defval: "",
     });
 
     if (!workbook.SheetNames.length) {
@@ -842,29 +841,34 @@ function ImportExport({
   };
 
   const previewRows = useMemo(() => {
-    const nameColumn = map.name;
+    const nameColumn = map['name'];
     if (!nameColumn) return [];
+
+    const col = (key: string, row: Record<string, unknown>) => {
+      const c = map[key];
+      return c ? String(row[c] ?? "").trim() : "";
+    };
 
     return rows
       .map((row, sourceIndex) => {
         const name = String(row[nameColumn] ?? "").trim();
         if (!name) return null;
 
-        const role = String(row[map.role] ?? "Batsman").trim() || "Batsman";
-        const rawBase = map.base_price ? Number(String(row[map.base_price] ?? "").replace(/,/g, "")) : 50;
+        const role = col('role', row) || "Batsman";
+        const rawBase = Number(col('base_price', row).replace(/,/g, ""));
         const base = Number.isFinite(rawBase) && rawBase > 0 ? rawBase : 50;
 
         return {
           sourceIndex,
           name,
           role,
-          grade: map.grade ? String(row[map.grade] ?? "").trim() : "",
+          grade: col('grade', row),
           base,
-          mobile: map.mobile ? String(row[map.mobile] ?? "").trim() : "",
-          city: map.city ? String(row[map.city] ?? "").trim() : "",
-          batting_style: map.batting_style ? String(row[map.batting_style] ?? "").trim() : "",
-          bowling_style: map.bowling_style ? String(row[map.bowling_style] ?? "").trim() : "",
-          photo_url: map.photo_url ? String(row[map.photo_url] ?? "").trim() : "",
+          mobile: col('mobile', row),
+          city: col('city', row),
+          batting_style: col('batting_style', row),
+          bowling_style: col('bowling_style', row),
+          photo_url: col('photo_url', row),
         };
       })
       .filter((row): row is NonNullable<typeof row> => !!row);

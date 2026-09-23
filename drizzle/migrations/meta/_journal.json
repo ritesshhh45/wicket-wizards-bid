@@ -29,6 +29,13 @@
       "when": 1790046089331,
       "tag": "0003_tournament_type_and_admin_bypass",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790132537008,
+      "tag": "0004_captain_invites_fixed_players_rounds",
+      "breakpoints": true
     }
   ]
 }

@@ -291,6 +291,7 @@ export type Database = {
       }
       players: {
         Row: {
+          auction_round: number
           base_price: number
           batting_style: string | null
           bowling_style: string | null
@@ -300,6 +301,7 @@ export type Database = {
           current_bid_team_id: string | null
           grade: string | null
           id: string
+          is_fixed: boolean
           mobile: string | null
           name: string
           photo_url: string | null
@@ -313,6 +315,7 @@ export type Database = {
           tournament_id: string
         }
         Insert: {
+          auction_round?: number
           base_price?: number
           batting_style?: string | null
           bowling_style?: string | null
@@ -322,6 +325,7 @@ export type Database = {
           current_bid_team_id?: string | null
           grade?: string | null
           id?: string
+          is_fixed?: boolean
           mobile?: string | null
           name: string
           photo_url?: string | null
@@ -335,6 +339,7 @@ export type Database = {
           tournament_id: string
         }
         Update: {
+          auction_round?: number
           base_price?: number
           batting_style?: string | null
           bowling_style?: string | null
@@ -344,6 +349,7 @@ export type Database = {
           current_bid_team_id?: string | null
           grade?: string | null
           id?: string
+          is_fixed?: boolean
           mobile?: string | null
           name?: string
           photo_url?: string | null
@@ -474,9 +480,12 @@ export type Database = {
       }
       teams: {
         Row: {
+          captain_claimed_at: string | null
           captain_name: string | null
+          captain_photo_url: string | null
           created_at: string
           id: string
+          invite_token: string | null
           logo_url: string | null
           name: string
           owner_name: string | null
@@ -486,9 +495,12 @@ export type Database = {
           tournament_id: string
         }
         Insert: {
+          captain_claimed_at?: string | null
           captain_name?: string | null
+          captain_photo_url?: string | null
           created_at?: string
           id?: string
+          invite_token?: string | null
           logo_url?: string | null
           name: string
           owner_name?: string | null
@@ -498,9 +510,12 @@ export type Database = {
           tournament_id: string
         }
         Update: {
+          captain_claimed_at?: string | null
           captain_name?: string | null
+          captain_photo_url?: string | null
           created_at?: string
           id?: string
+          invite_token?: string | null
           logo_url?: string | null
           name?: string
           owner_name?: string | null
@@ -529,6 +544,7 @@ export type Database = {
           category_limits: Json
           config_locked: boolean
           created_at: string
+          current_round: number
           id: string
           min_max_squad: Json
           name: string
@@ -551,6 +567,7 @@ export type Database = {
           category_limits?: Json
           config_locked?: boolean
           created_at?: string
+          current_round?: number
           id?: string
           min_max_squad?: Json
           name: string
@@ -573,6 +590,7 @@ export type Database = {
           category_limits?: Json
           config_locked?: boolean
           created_at?: string
+          current_round?: number
           id?: string
           min_max_squad?: Json
           name?: string
@@ -611,6 +629,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_team_invite: { Args: { p_token: string }; Returns: Json }
       complete_auction: { Args: { p_session_id: string }; Returns: Json }
       has_role: {
         Args: {
@@ -654,12 +673,21 @@ export type Database = {
         Returns: Json
       }
       reauction_player: { Args: { p_player_id: string }; Returns: Json }
+      regenerate_team_invite: { Args: { p_team_id: string }; Returns: Json }
       reopen_player: { Args: { p_player_id: string }; Returns: Json }
       review_payment: {
         Args: { p_approve: boolean; p_payment_id: string }
         Returns: Json
       }
+      set_fixed_player: {
+        Args: { p_player_id: string; p_team_id: string }
+        Returns: Json
+      }
       start_auction: { Args: { p_session_id: string }; Returns: Json }
+      start_reauction_round: {
+        Args: { p_tournament_id: string }
+        Returns: Json
+      }
       undo_last_bid: { Args: { p_player_id: string }; Returns: Json }
     }
     Enums: {
