@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { Copy, Download, Share2, Trash2, Plus, Play, ShieldCheck, UserRound, ExternalLink } from "lucide-react";
+import { Copy, Download, Share2, Trash2, Plus, Play, KeyRound, RefreshCw, LockKeyhole, UnlockKeyhole } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, Empty, Input, Label, SectionTitle, Select } from "@/components/ui-kit";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,6 +28,26 @@ export const Route = createFileRoute("/manage/$id")({
 const TABS = ["Overview", "Teams", "Players", "Registrations", "Import / Export", "Settings", "Sessions", "Share"] as const;
 type Tab = (typeof TABS)[number];
 
+type CaptainAccess = {
+  id: string;
+  password: string;
+  locked: boolean;
+};
+
+function makeCaptainId() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let value = "AUC-";
+  for (let i = 0; i < 6; i += 1) value += chars[Math.floor(Math.random() * chars.length)];
+  return value;
+}
+
+function makeCaptainPassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  let value = "";
+  for (let i = 0; i < 8; i += 1) value += chars[Math.floor(Math.random() * chars.length)];
+  return value;
+}
+
 function ManageTournament() {
   const { id } = Route.useParams();
   const { user, isSuperAdmin } = useAuth();
@@ -36,12 +56,47 @@ function ManageTournament() {
   const { tournament, teams, players, session } = state;
   const [tab, setTab] = useState<Tab>("Overview");
   const [startingAuction, setStartingAuction] = useState(false);
+  const [captainAccess, setCaptainAccess] = useState<CaptainAccess | null>(null);
 
   const isOwner = !!user && !!tournament && (tournament.owner_id === user.id || isSuperAdmin);
   const categories = (tournament?.categories ?? []) as unknown as string[];
   const tiers = (tournament?.base_price_tiers ?? []) as unknown as { grade: string; price: number }[];
   const pending = players.filter((p) => p.status === "pending_approval");
   const squadPlayers = players.filter((p) => p.status !== "pending_approval");
+
+  useEffect(() => {
+    if (!id || !isOwner) return;
+    void (async () => {
+      const client = supabase as any;
+      const { data, error } = await client
+        .from("tournaments")
+        .select("captain_access_id,captain_access_password,captain_access_locked")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) {
+        console.warn("Captain access columns are not available yet:", error.message);
+        return;
+      }
+      if (data?.captain_access_id && data?.captain_access_password) {
+        setCaptainAccess({
+          id: data.captain_access_id,
+          password: data.captain_access_password,
+          locked: Boolean(data.captain_access_locked),
+        });
+        return;
+      }
+      const next = { id: makeCaptainId(), password: makeCaptainPassword(), locked: false };
+      const { error: saveError } = await client
+        .from("tournaments")
+        .update({
+          captain_access_id: next.id,
+          captain_access_password: next.password,
+          captain_access_locked: false,
+        })
+        .eq("id", id);
+      if (!saveError) setCaptainAccess(next);
+    })();
+  }, [id, isOwner]);
 
   if (!tournament) {
     return (
@@ -135,6 +190,15 @@ function ManageTournament() {
         {tournament.config_locked && <Badge tone="warning">🔒 Auction configuration locked</Badge>}
       </div>
 
+      <CaptainAccessPanel
+        tournamentId={id}
+        tournamentName={tournament.name}
+        teams={teams}
+        access={captainAccess}
+        setAccess={setCaptainAccess}
+        reload={state.reload}
+      />
+
       <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
         {TABS.map((t) => (
           <button
@@ -156,8 +220,187 @@ function ManageTournament() {
       {tab === "Import / Export" && <ImportExport tournamentId={id} players={squadPlayers} teams={teams} reload={state.reload} />}
       {tab === "Settings" && <SettingsTab tournament={tournament} reload={state.reload} />}
       {tab === "Sessions" && <SessionsTab tournamentId={id} reload={state.reload} currentSessionId={session?.id ?? null} />}
-      {tab === "Share" && <ShareTab tournamentId={id} registered={pending.length + squadPlayers.length} />}
+      {tab === "Share" && <ShareTab tournamentId={id} registered={pending.length + squadPlayers.length} captainAccess={captainAccess} tournamentName={tournament.name} />}
     </AppShell>
+  );
+}
+
+
+function CaptainAccessPanel({
+  tournamentId,
+  tournamentName,
+  teams,
+  access,
+  setAccess,
+  reload,
+}: {
+  tournamentId: string;
+  tournamentName: string;
+  teams: ReturnType<typeof useAuctionState>["teams"];
+  access: CaptainAccess | null;
+  setAccess: (value: CaptainAccess | null) => void;
+  reload: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function saveAccess(next: CaptainAccess) {
+    setBusy(true);
+    try {
+      const client = supabase as any;
+      const { error } = await client
+        .from("tournaments")
+        .update({
+          captain_access_id: next.id,
+          captain_access_password: next.password,
+          captain_access_locked: next.locked,
+        })
+        .eq("id", tournamentId);
+      if (error) throw error;
+      setAccess(next);
+      await reload();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function regenerate() {
+    if (!confirm("Regenerate Captain ID and password? Existing captain access will stop working.")) return;
+    await saveAccess({ id: makeCaptainId(), password: makeCaptainPassword(), locked: false });
+    toast.success("New Captain ID and password generated");
+  }
+
+  async function toggleLock() {
+    if (!access) return;
+    const next = { ...access, locked: !access.locked };
+    await saveAccess(next);
+    toast.success(next.locked ? "Captain joining locked" : "Captain joining unlocked");
+  }
+
+  function copy(text: string, label: string) {
+    void navigator.clipboard.writeText(text);
+    toast.success(`${label} copied`);
+  }
+
+  function share() {
+    if (!access) return;
+    const message = [
+      `🏏 ${tournamentName}`,
+      "Captain Auction Access",
+      `Auction ID: ${access.id}`,
+      `Password: ${access.password}`,
+      "Open the website → Manage Tournament → Join Auction.",
+    ].join("\n");
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <Card className="mb-5 overflow-hidden border-primary/30 bg-primary/5">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
+          <KeyRound className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display text-lg font-bold">Captain Auction Access</h3>
+            {access?.locked ? <Badge tone="warning">Joining locked</Badge> : <Badge tone="success">Open</Badge>}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            One ID + password for this tournament. Share the same credentials with all 8 captains.
+          </p>
+        </div>
+      </div>
+
+      {access ? (
+        <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl bg-surface p-3 ring-1 ring-border">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Auction ID</p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="font-mono text-lg font-black tracking-wider">{access.id}</p>
+                <Button variant="ghost" onClick={() => copy(access.id, "Auction ID")}><Copy className="size-4" /></Button>
+              </div>
+            </div>
+            <div className="rounded-xl bg-surface p-3 ring-1 ring-border">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Captain Password</p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="font-mono text-lg font-black tracking-wider">{access.password}</p>
+                <Button variant="ghost" onClick={() => copy(access.password, "Password")}><Copy className="size-4" /></Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="accent" disabled={busy} onClick={share}><Share2 className="size-4" /> Share on WhatsApp</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => void regenerate()}><RefreshCw className="size-4" /> Regenerate</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => void toggleLock()}>
+              {access.locked ? <UnlockKeyhole className="size-4" /> : <LockKeyhole className="size-4" />}
+              {access.locked ? "Unlock captain joining" : "Lock captain joining"}
+            </Button>
+          </div>
+
+          <div className="mt-4 border-t border-border pt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <p className="font-bold">Captain / Team Status</p>
+                <p className="text-xs text-muted-foreground">{teams.filter((t) => Boolean(t.captain_name?.trim())).length}/8 captains joined</p>
+              </div>
+              <Badge tone="primary">{teams.length}/8 teams</Badge>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {teams.map((team, index) => {
+                const joined = Boolean(team.captain_name?.trim());
+                return (
+                  <div key={team.id} className="rounded-xl bg-surface p-3 ring-1 ring-border">
+                    <div className="flex items-center gap-2">
+                      <div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-2">
+                        {team.logo_url ? <img src={team.logo_url} alt="" className="size-9 object-cover" /> : <span>🛡️</span>}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-black">TEAM {String(index + 1).padStart(2, "0")}</p>
+                        <p className="truncate text-sm font-bold">{team.name}</p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Captain: <span className="font-semibold text-foreground">{team.captain_name || "Waiting"}</span>
+                    </p>
+                    {team.owner_name && <p className="mt-1 text-[11px] text-muted-foreground">Owner: {team.owner_name}</p>}
+                    {joined && !access.locked && (
+                      <Button
+                        variant="danger"
+                        className="mt-2 w-full"
+                        disabled={busy}
+                        onClick={async () => {
+                          if (!confirm(`Remove captain from ${team.name}?`)) return;
+                          setBusy(true);
+                          try {
+                            const { error } = await supabase.from("teams").update({ captain_name: null }).eq("id", team.id);
+                            if (error) throw error;
+                            await reload();
+                            toast.success(`Captain removed from ${team.name}`);
+                          } catch (err) {
+                            toast.error((err as Error).message);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        Remove Captain
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="mt-4 rounded-xl bg-surface p-4 text-sm text-muted-foreground ring-1 ring-border">
+          Captain access is not initialized. Add the captain-access columns to the tournaments table, then reload.
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -319,7 +562,7 @@ function TeamsTab({
           <div>
             <p className="font-bold">Teams & Captains</p>
             <p className="text-xs text-muted-foreground">
-              {teams.length}/8 teams created. Captain links are generated per team.
+              {teams.length}/8 teams created. All captains use the single tournament Captain ID + Password.
             </p>
           </div>
           <Badge tone={teams.length >= 8 ? "success" : "primary"}>{teams.length}/8</Badge>
@@ -327,19 +570,6 @@ function TeamsTab({
 
         {teams.map((t, index) => {
           const s = squadStats(players, t.id);
-          // Team-specific captain entry URL. The existing live route receives the
-          // team id through `captain_team`; captain registration/permission handling
-          // must be wired in the register/live route and database policies.
-          const captainLink =
-            typeof window !== "undefined"
-              ? `${window.location.origin}/live/${tournamentId}?captain_team=${encodeURIComponent(t.id)}`
-              : `/live/${tournamentId}?captain_team=${encodeURIComponent(t.id)}`;
-
-          const captainRegistrationLink =
-            typeof window !== "undefined"
-              ? `${window.location.origin}/register/${tournamentId}?captain_team=${encodeURIComponent(t.id)}&role=captain`
-              : `/register/${tournamentId}?captain_team=${encodeURIComponent(t.id)}&role=captain`;
-
           return (
             <Card key={t.id} className="overflow-hidden">
               <div className="flex flex-wrap items-center gap-3">
@@ -371,46 +601,6 @@ function TeamsTab({
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="ghost"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(captainRegistrationLink);
-                      toast.success(`Captain registration link copied for ${t.name}`);
-                    }}
-                  >
-                    <UserRound className="size-4" /> Captain Register
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(captainLink);
-                      toast.success(`Captain auction link copied for ${t.name}`);
-                    }}
-                  >
-                    <ShieldCheck className="size-4" /> Captain Auction
-                  </Button>
-
-                  <a
-                    href={captainRegistrationLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold"
-                  >
-                    <ExternalLink className="size-4" /> Open Register
-                  </a>
-
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(
-                      `Captain registration / auction link for ${t.name}: ${captainLink}`,
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold"
-                  >
-                    <Share2 className="size-4" /> WhatsApp
-                  </a>
-
-                  <Button
-                    variant="ghost"
                     onClick={async () => {
                       if (!confirm(`Delete ${t.name}?`)) return;
                       await supabase.from("teams").delete().eq("id", t.id);
@@ -422,20 +612,6 @@ function TeamsTab({
                 </div>
               </div>
 
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
-                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <UserRound className="size-3.5" /> Captain registration link
-                  </div>
-                  <p className="mt-1 break-all text-xs text-muted-foreground">{captainRegistrationLink}</p>
-                </div>
-                <div className="rounded-xl border border-accent/20 bg-accent/5 px-3 py-2">
-                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-accent">
-                    <ShieldCheck className="size-3.5" /> Captain auction link
-                  </div>
-                  <p className="mt-1 break-all text-xs text-muted-foreground">{captainLink}</p>
-                </div>
-              </div>
             </Card>
           );
         })}
@@ -853,6 +1029,7 @@ function ImportExport({
       cellDates: false,
       raw: false,
       dense: true,
+      defval: "",
     });
 
     if (!workbook.SheetNames.length) {
@@ -938,34 +1115,29 @@ function ImportExport({
   };
 
   const previewRows = useMemo(() => {
-    const nameColumn = map['name'];
+    const nameColumn = map.name;
     if (!nameColumn) return [];
-
-    const col = (key: string, row: Record<string, unknown>) => {
-      const c = map[key];
-      return c ? String(row[c] ?? "").trim() : "";
-    };
 
     return rows
       .map((row, sourceIndex) => {
         const name = String(row[nameColumn] ?? "").trim();
         if (!name) return null;
 
-        const role = col('role', row) || "Batsman";
-        const rawBase = Number(col('base_price', row).replace(/,/g, ""));
+        const role = String(row[map.role] ?? "Batsman").trim() || "Batsman";
+        const rawBase = map.base_price ? Number(String(row[map.base_price] ?? "").replace(/,/g, "")) : 50;
         const base = Number.isFinite(rawBase) && rawBase > 0 ? rawBase : 50;
 
         return {
           sourceIndex,
           name,
           role,
-          grade: col('grade', row),
+          grade: map.grade ? String(row[map.grade] ?? "").trim() : "",
           base,
-          mobile: col('mobile', row),
-          city: col('city', row),
-          batting_style: col('batting_style', row),
-          bowling_style: col('bowling_style', row),
-          photo_url: col('photo_url', row),
+          mobile: map.mobile ? String(row[map.mobile] ?? "").trim() : "",
+          city: map.city ? String(row[map.city] ?? "").trim() : "",
+          batting_style: map.batting_style ? String(row[map.batting_style] ?? "").trim() : "",
+          bowling_style: map.bowling_style ? String(row[map.bowling_style] ?? "").trim() : "",
+          photo_url: map.photo_url ? String(row[map.photo_url] ?? "").trim() : "",
         };
       })
       .filter((row): row is NonNullable<typeof row> => !!row);
@@ -1400,7 +1572,7 @@ function SessionsTab({
   );
 }
 
-function ShareTab({ tournamentId, registered }: { tournamentId: string; registered: number }) {
+function ShareTab({ tournamentId, registered, captainAccess, tournamentName }: { tournamentId: string; registered: number; captainAccess: CaptainAccess | null; tournamentName: string }) {
   const [origin, setOrigin] = useState("");
   const [qrs, setQrs] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -1426,6 +1598,29 @@ function ShareTab({ tournamentId, registered }: { tournamentId: string; register
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      {captainAccess && (
+        <Card className="md:col-span-2 border-primary/30 bg-primary/5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-bold">Captain Join Auction</p>
+              <p className="mt-1 text-xs text-muted-foreground">One ID + password for all captains of {tournamentName}.</p>
+            </div>
+            <Button
+              variant="accent"
+              onClick={() => {
+                const message = `🏏 ${tournamentName}\nAuction ID: ${captainAccess.id}\nPassword: ${captainAccess.password}\nOpen website → Manage Tournament → Join Auction.`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+              }}
+            >
+              <Share2 className="size-4" /> Share Captain Access
+            </Button>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg bg-surface p-3 ring-1 ring-border"><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Auction ID</p><p className="font-mono text-lg font-black">{captainAccess.id}</p></div>
+            <div className="rounded-lg bg-surface p-3 ring-1 ring-border"><p className="text-[10px] uppercase tracking-widest text-muted-foreground">Password</p><p className="font-mono text-lg font-black">{captainAccess.password}</p></div>
+          </div>
+        </Card>
+      )}
       <Card className="md:col-span-2">
         <p className="text-sm font-bold text-accent">{registered} players registered</p>
       </Card>

@@ -38,8 +38,19 @@ import {
 } from "@/lib/auction";
 
 export const Route = createFileRoute("/live/$id")({
-  validateSearch: (s: Record<string, unknown>): { view?: string } =>
-    typeof s["view"] === "string" ? { view: s["view"] } : {},
+  validateSearch: (s: Record<string, unknown>): {
+    view?: string;
+    role?: string;
+    access_id?: string;
+    access_password?: string;
+    captain_team?: string;
+  } => ({
+    ...(typeof s["view"] === "string" ? { view: s["view"] } : {}),
+    ...(typeof s["role"] === "string" ? { role: s["role"] } : {}),
+    ...(typeof s["access_id"] === "string" ? { access_id: s["access_id"] } : {}),
+    ...(typeof s["access_password"] === "string" ? { access_password: s["access_password"] } : {}),
+    ...(typeof s["captain_team"] === "string" ? { captain_team: s["captain_team"] } : {}),
+  }),
 
   head: () => ({
     meta: [
@@ -68,6 +79,7 @@ function LiveAuction() {
   const search = useSearch({ from: "/live/$id" });
 
   const publicMode = search.view === "public";
+  const captainMode = search.role === "captain" && !publicMode;
 
   const { user, isSuperAdmin } = useAuth();
 
@@ -87,6 +99,10 @@ function LiveAuction() {
   const [showQueue, setShowQueue] = useState(false);
   const [showPlayers, setShowPlayers] = useState(true);
   const [playerSearch, setPlayerSearch] = useState("");
+  const [captainAuthLoading, setCaptainAuthLoading] = useState(captainMode);
+  const [captainVerified, setCaptainVerified] = useState(!captainMode);
+  const [captainAuthError, setCaptainAuthError] = useState("");
+  const [captainTeamId, setCaptainTeamId] = useState<string | null>(null);
 
   // Once the first auction round is finished, every unsold player is
   // moved into a second (double-auction) round. sessionStorage keeps the
@@ -109,10 +125,107 @@ function LiveAuction() {
     !!tournament &&
     (tournament.owner_id === user.id || isSuperAdmin);
 
-  const myTeam =
-    teams.find((t) => t.owner_user_id === user?.id) ?? null;
+  const captainTeamStorageKey = `cricket-auction-captain-team-${id}`;
 
-  const auctioneer = isOwner && !publicMode;
+  useEffect(() => {
+    if (!captainMode) {
+      setCaptainAuthLoading(false);
+      setCaptainVerified(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      setCaptainAuthLoading(true);
+      setCaptainAuthError("");
+
+      const accessId = search.access_id?.trim();
+      const accessPassword = search.access_password?.trim();
+
+      if (!accessId || !accessPassword) {
+        const savedTeam =
+          typeof window !== "undefined"
+            ? window.sessionStorage.getItem(captainTeamStorageKey)
+            : null;
+        if (!cancelled) {
+          setCaptainTeamId(search.captain_team ?? savedTeam);
+          setCaptainVerified(false);
+          setCaptainAuthError(
+            "Captain access credentials are missing. Open the Join Auction screen and verify your Auction ID and Password first.",
+          );
+          setCaptainAuthLoading(false);
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("tournaments")
+        .select("id, captain_access_id, captain_access_password, captain_access_locked")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) {
+        setCaptainVerified(false);
+        setCaptainAuthError(error.message);
+        setCaptainAuthLoading(false);
+        return;
+      }
+
+      if (!data) {
+        setCaptainVerified(false);
+        setCaptainAuthError("Tournament not found.");
+        setCaptainAuthLoading(false);
+        return;
+      }
+
+      const accessData = data as unknown as {
+        captain_access_id?: string | null;
+        captain_access_password?: string | null;
+        captain_access_locked?: boolean | null;
+      };
+
+      if (accessData.captain_access_locked) {
+        setCaptainVerified(false);
+        setCaptainAuthError("Captain joining is locked by the tournament owner.");
+        setCaptainAuthLoading(false);
+        return;
+      }
+
+      if (accessData.captain_access_id !== accessId || accessData.captain_access_password !== accessPassword) {
+        setCaptainVerified(false);
+        setCaptainAuthError("Invalid Auction ID or Password.");
+        setCaptainAuthLoading(false);
+        return;
+      }
+
+      const savedTeam =
+        typeof window !== "undefined"
+          ? window.sessionStorage.getItem(captainTeamStorageKey)
+          : null;
+      const resolvedTeam = search.captain_team ?? savedTeam;
+
+      if (resolvedTeam) {
+        setCaptainTeamId(resolvedTeam);
+      }
+
+      setCaptainVerified(true);
+      setCaptainAuthLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [captainMode, captainTeamStorageKey, id, search.access_id, search.access_password, search.captain_team]);
+
+  const myTeam = captainMode
+    ? teams.find((t) => t.id === captainTeamId) ?? null
+    : teams.find((t) => t.owner_user_id === user?.id) ?? null;
+
+  const auctioneer = isOwner && !publicMode && !captainMode;
+  const visibleTeams = captainMode && myTeam ? [myTeam] : teams;
 
   // Force the tournament to use the exact auction slabs requested for this app.
   // This is important because the Supabase `place_bid` RPC reads
@@ -382,6 +495,16 @@ function LiveAuction() {
   async function placeBid(team: Team) {
     if (!current) return;
 
+    if (captainMode && (!captainVerified || !myTeam || myTeam.id !== team.id)) {
+      toast.error("You can only bid for your assigned team.");
+      return;
+    }
+
+    if (!captainMode && !auctioneer) {
+      toast.error("Only an authorized auction participant can place a bid.");
+      return;
+    }
+
     const check = canBid(team);
 
     if (!check.ok) {
@@ -596,6 +719,34 @@ function LiveAuction() {
 
   const body = (
     <div className="space-y-5">
+
+      {captainMode && captainVerified && (
+        <Card className="overflow-hidden border-primary/30 bg-primary/5">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-surface-2 ring-1 ring-primary/30">
+              {myTeam?.logo_url ? (
+                <img src={myTeam.logo_url} alt="" className="size-full object-cover" />
+              ) : (
+                <span className="text-2xl">🛡️</span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Captain Access Verified</p>
+              <h2 className="truncate font-display text-xl font-black">{myTeam?.name ?? "Team assignment pending"}</h2>
+              <p className="text-sm text-muted-foreground">
+                Captain: {myTeam?.captain_name ?? "Pending"}
+                {myTeam?.owner_name ? ` · Owner: ${myTeam.owner_name}` : ""}
+              </p>
+            </div>
+            <Badge tone="success">BID ONLY</Badge>
+          </div>
+          {!myTeam && (
+            <div className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs font-semibold text-warning">
+              Your captain access is verified, but no team has been assigned to this session yet. Complete Join Auction team assignment first.
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* ========================================================= */}
       {/* TOP BAR */}
@@ -870,7 +1021,7 @@ function LiveAuction() {
       {/* PLAYER NUMBER BOARD */}
       {/* ========================================================= */}
 
-      {!publicMode && (
+      {auctioneer && (
         <Card className="overflow-hidden">
 
           <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -1451,7 +1602,7 @@ function LiveAuction() {
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 
-            {teams.map((team) => {
+            {visibleTeams.map((team) => {
 
               const stats = squadStats(
                 players,
@@ -1835,6 +1986,37 @@ function LiveAuction() {
       )}
     </div>
   );
+
+  if (captainMode && captainAuthLoading) {
+    return (
+      <AppShell>
+        <Card className="mx-auto max-w-xl p-8 text-center">
+          <Lock className="mx-auto mb-4 size-10 text-primary" />
+          <h1 className="font-display text-2xl font-black">Verifying Captain Access…</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Checking your Auction ID and Password.</p>
+        </Card>
+      </AppShell>
+    );
+  }
+
+  if (captainMode && !captainVerified) {
+    return (
+      <AppShell>
+        <Card className="mx-auto max-w-xl p-8 text-center">
+          <Lock className="mx-auto mb-4 size-10 text-destructive" />
+          <h1 className="font-display text-2xl font-black">Captain Access Denied</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{captainAuthError || "Invalid captain credentials."}</p>
+          <Link
+            to="/manage/$id"
+            params={{ id }}
+            className="mt-5 inline-flex rounded-xl border border-border px-4 py-2 text-sm font-bold"
+          >
+            Back to Tournament
+          </Link>
+        </Card>
+      </AppShell>
+    );
+  }
 
   if (loading) {
     return (

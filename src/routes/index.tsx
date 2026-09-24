@@ -6,6 +6,7 @@ import {
   Users,
   Radio,
   ShieldCheck,
+  UserRoundPlus,
   Phone,
   Mail,
 } from "lucide-react";
@@ -131,6 +132,13 @@ function Index() {
               >
                 <Radio className="mr-2 size-4 text-purple-400" />
                 Watch Live
+              </Link>
+\n              <Link
+                to="/join-auction"
+                className="inline-flex items-center justify-center rounded-xl border border-green-400/30 bg-black/30 px-5 py-3 text-sm font-bold text-green-300 backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-green-400 hover:bg-green-400/10"
+              >
+                <UserRoundPlus className="mr-2 size-4" />
+                Join Auction
               </Link>
 
               {!user && (
