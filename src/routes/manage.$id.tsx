@@ -1183,21 +1183,23 @@ function ImportExport({
 
       const unique = new Map<string, (typeof previewRows)[number]>();
 
+      let dupes = 0;
       for (const p of previewRows) {
-        const nameKey = `name:${p.name.toLowerCase()}`;
-        const mobileKey = p.mobile ? `mobile:${p.mobile}` : "";
-        if (existingKeys.has(nameKey) || (mobileKey && existingKeys.has(mobileKey))) continue;
-
-        const rowKey = mobileKey || nameKey;
-        if (!unique.has(rowKey)) unique.set(rowKey, p);
+        const rowKey = dedupeKey(p.name, p.mobile, p.city);
+        if (existingKeys.has(rowKey) || unique.has(rowKey)) {
+          dupes++;
+          continue;
+        }
+        unique.set(rowKey, p);
       }
+      if (dupes) toast.info(`${dupes} duplicate rows skipped`);
 
       const payload = Array.from(unique.values()).map((p) => ({
         tournament_id: tournamentId,
         name: p.name,
         role: p.role,
         grade: p.grade || null,
-        base_price: 50, // auction default requested
+        base_price: p.base,
         mobile: p.mobile || null,
         city: p.city || null,
         batting_style: p.batting_style || null,
