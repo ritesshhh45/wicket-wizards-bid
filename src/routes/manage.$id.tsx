@@ -979,18 +979,33 @@ function ImportExport({
       }
     }
 
-    return bestIndex >= 0 ? bestIndex : matrix.findIndex((row) => row.some((v) => String(v ?? "").trim() !== ""));
+    // No recognizable header: every row is data (e.g. numbered PDF lists).
+    return bestIndex;
   };
 
   const matrixToObjects = (matrix: unknown[][]) => {
     const headerIndex = findHeaderRow(matrix);
-    if (headerIndex < 0) return [];
-
-    const rawHeaders = matrix[headerIndex] ?? [];
+    const width = Math.max(0, ...matrix.map((r) => r.length));
+    const rawHeaders: unknown[] =
+      headerIndex >= 0 ? (matrix[headerIndex] ?? []) : Array.from({ length: width }, () => "");
+    if (headerIndex < 0) {
+      // Guess the name column: the column with the most non-numeric text.
+      let best = 0;
+      let bestCount = -1;
+      for (let c = 0; c < width; c++) {
+        const count = matrix.filter((r) => /[a-z]/i.test(String(r[c] ?? ""))).length;
+        if (count > bestCount) {
+          bestCount = count;
+          best = c;
+        }
+      }
+      rawHeaders[best] = "Name";
+    }
     const headers: string[] = [];
     const used = new Set<string>();
 
-    rawHeaders.forEach((value, index) => {
+    Array.from({ length: Math.max(width, rawHeaders.length) }).forEach((_, index) => {
+      const value = rawHeaders[index];
       let header = String(value ?? "").trim();
       if (!header) header = `column_${index + 1}`;
 
@@ -1029,7 +1044,6 @@ function ImportExport({
       cellDates: false,
       raw: false,
       dense: true,
-      defval: "",
     });
 
     if (!workbook.SheetNames.length) {
