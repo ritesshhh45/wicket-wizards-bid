@@ -1154,7 +1154,7 @@ function ImportExport({
   };
 
   const previewRows = useMemo(() => {
-    const nameColumn = map.name;
+    const nameColumn = map["name"];
     if (!nameColumn) return [];
 
     return rows
@@ -1162,21 +1162,21 @@ function ImportExport({
         const name = String(row[nameColumn] ?? "").trim();
         if (!name) return null;
 
-        const role = String(row[map.role] ?? "Batsman").trim() || "Batsman";
-        const rawBase = map.base_price ? Number(String(row[map.base_price] ?? "").replace(/,/g, "")) : 50;
+        const role = String(row[map["role"]] ?? "Batsman").trim() || "Batsman";
+        const rawBase = map["base_price"] ? Number(String(row[map["base_price"]] ?? "").replace(/,/g, "")) : 50;
         const base = Number.isFinite(rawBase) && rawBase > 0 ? rawBase : 50;
 
         return {
           sourceIndex,
           name,
           role,
-          grade: map.grade ? String(row[map.grade] ?? "").trim() : "",
+          grade: map["grade"] ? String(row[map["grade"]] ?? "").trim() : "",
           base,
-          mobile: map.mobile ? String(row[map.mobile] ?? "").trim() : "",
-          city: map.city ? String(row[map.city] ?? "").trim() : "",
-          batting_style: map.batting_style ? String(row[map.batting_style] ?? "").trim() : "",
-          bowling_style: map.bowling_style ? String(row[map.bowling_style] ?? "").trim() : "",
-          photo_url: map.photo_url ? String(row[map.photo_url] ?? "").trim() : "",
+          mobile: map["mobile"] ? String(row[map["mobile"]] ?? "").trim() : "",
+          city: map["city"] ? String(row[map["city"]] ?? "").trim() : "",
+          batting_style: map["batting_style"] ? String(row[map["batting_style"]] ?? "").trim() : "",
+          bowling_style: map["bowling_style"] ? String(row[map["bowling_style"]] ?? "").trim() : "",
+          photo_url: map["photo_url"] ? String(row[map["photo_url"]] ?? "").trim() : "",
         };
       })
       .filter((row): row is NonNullable<typeof row> => !!row);
@@ -1269,7 +1269,7 @@ function ImportExport({
 
         <Input
           type="file"
-          accept=".xlsx,.xls,.csv"
+          accept=".pdf,.xlsx,.xls,.csv"
           disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -1360,7 +1360,7 @@ function ImportExport({
                     <div className="grid grid-cols-2 border-t border-border">
                       <div className="p-2.5">
                         <p className="text-[10px] uppercase text-muted-foreground">Base</p>
-                        <p className="font-extrabold text-accent">{formatMoney(50)}</p>
+                        <p className="font-extrabold text-accent">{formatMoney(p.base)}</p>
                       </div>
                       <div className="border-l border-border p-2.5">
                         <p className="text-[10px] uppercase text-muted-foreground">Status</p>
