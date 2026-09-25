@@ -903,6 +903,12 @@ function ImportExport({
     team: teams.find((t) => t.id === p.sold_to_team_id)?.name ?? "",
   }));
 
+  const dedupeKey = (name: string, mobile: string, city: string) => {
+    const n = name.trim().toLowerCase().replace(/\s+/g, " ");
+    const m = mobile.replace(/\D/g, "");
+    return m ? `${n}|m:${m}` : `${n}|c:${city.trim().toLowerCase()}`;
+  };
+
   const normalized = (value: unknown) =>
     String(value ?? "")
       .trim()
@@ -979,18 +985,33 @@ function ImportExport({
       }
     }
 
-    return bestIndex >= 0 ? bestIndex : matrix.findIndex((row) => row.some((v) => String(v ?? "").trim() !== ""));
+    // No recognizable header: every row is data (e.g. numbered PDF lists).
+    return bestIndex;
   };
 
   const matrixToObjects = (matrix: unknown[][]) => {
     const headerIndex = findHeaderRow(matrix);
-    if (headerIndex < 0) return [];
-
-    const rawHeaders = matrix[headerIndex] ?? [];
+    const width = Math.max(0, ...matrix.map((r) => r.length));
+    const rawHeaders: unknown[] =
+      headerIndex >= 0 ? (matrix[headerIndex] ?? []) : Array.from({ length: width }, () => "");
+    if (headerIndex < 0) {
+      // Guess the name column: the column with the most non-numeric text.
+      let best = 0;
+      let bestCount = -1;
+      for (let c = 0; c < width; c++) {
+        const count = matrix.filter((r) => /[a-z]/i.test(String(r[c] ?? ""))).length;
+        if (count > bestCount) {
+          bestCount = count;
+          best = c;
+        }
+      }
+      rawHeaders[best] = "Name";
+    }
     const headers: string[] = [];
     const used = new Set<string>();
 
-    rawHeaders.forEach((value, index) => {
+    Array.from({ length: Math.max(width, rawHeaders.length) }).forEach((_, index) => {
+      const value = rawHeaders[index];
       let header = String(value ?? "").trim();
       if (!header) header = `column_${index + 1}`;
 
@@ -1005,9 +1026,12 @@ function ImportExport({
 
     const output: Record<string, unknown>[] = [];
 
+    const headerSig = headerIndex >= 0 ? (matrix[headerIndex] ?? []).map((v) => cleanHeader(v)).join("|") : null;
     for (let rowIndex = headerIndex + 1; rowIndex < matrix.length; rowIndex++) {
       const row = matrix[rowIndex] ?? [];
       if (!row.some((value) => String(value ?? "").trim() !== "")) continue;
+      // Skip header rows repeated on later PDF pages / sheets.
+      if (headerSig && row.map((v) => cleanHeader(v)).join("|") === headerSig) continue;
 
       const object: Record<string, unknown> = {};
       headers.forEach((header, columnIndex) => {
@@ -1029,7 +1053,6 @@ function ImportExport({
       cellDates: false,
       raw: false,
       dense: true,
-      defval: "",
     });
 
     if (!workbook.SheetNames.length) {
@@ -1088,21 +1111,37 @@ function ImportExport({
     return parsed;
   };
 
+  const readPdf = async (file: File) => {
+    const { parsePdfToMatrix } = await import("@/lib/pdf-import");
+    const result = await parsePdfToMatrix(file);
+    const parsed = matrixToObjects(result.matrix);
+    if (!parsed.length) throw new Error("No player rows found in PDF.");
+    return { parsed, pages: result.pages };
+  };
+
   const handleFile = async (file: File) => {
     setBusy(true);
     try {
       const ext = file.name.toLowerCase().split(".").pop();
 
-      if (!["xlsx", "xls", "csv"].includes(ext ?? "")) {
-        throw new Error("For this importer use Excel (.xlsx/.xls) or CSV. PDF/DOC parsing is kept separate so player rows are never imported incorrectly.");
+      if (!["xlsx", "xls", "csv", "pdf"].includes(ext ?? "")) {
+        throw new Error("Use PDF, Excel (.xlsx/.xls) or CSV.");
       }
 
-      const parsed = ext === "csv" ? await readCsv(file) : await readSpreadsheet(file);
+      let pages = 1;
+      let parsed: Record<string, unknown>[];
+      if (ext === "pdf") {
+        const r = await readPdf(file);
+        parsed = r.parsed;
+        pages = r.pages;
+      } else {
+        parsed = ext === "csv" ? await readCsv(file) : await readSpreadsheet(file);
+      }
       const guessed = guessMapping(parsed);
 
       setRows(parsed);
       setMap(guessed);
-      setSourceFile(`${file.name} · ${parsed.length} source rows · all sheets merged`);
+      setSourceFile(`${file.name} · ${pages} page${pages > 1 ? "s" : ""} · ${parsed.length} rows`);
       toast.success(`${parsed.length} player rows found`);
     } catch (err) {
       setRows([]);
@@ -1115,7 +1154,7 @@ function ImportExport({
   };
 
   const previewRows = useMemo(() => {
-    const nameColumn = map.name;
+    const nameColumn = map["name"];
     if (!nameColumn) return [];
 
     return rows
@@ -1123,21 +1162,21 @@ function ImportExport({
         const name = String(row[nameColumn] ?? "").trim();
         if (!name) return null;
 
-        const role = String(row[map.role] ?? "Batsman").trim() || "Batsman";
-        const rawBase = map.base_price ? Number(String(row[map.base_price] ?? "").replace(/,/g, "")) : 50;
+        const role = (map["role"] ? String(row[map["role"]] ?? "").trim() : "") || "Batsman";
+        const rawBase = map["base_price"] ? Number(String(row[map["base_price"]] ?? "").replace(/,/g, "")) : 50;
         const base = Number.isFinite(rawBase) && rawBase > 0 ? rawBase : 50;
 
         return {
           sourceIndex,
           name,
           role,
-          grade: map.grade ? String(row[map.grade] ?? "").trim() : "",
+          grade: map["grade"] ? String(row[map["grade"]] ?? "").trim() : "",
           base,
-          mobile: map.mobile ? String(row[map.mobile] ?? "").trim() : "",
-          city: map.city ? String(row[map.city] ?? "").trim() : "",
-          batting_style: map.batting_style ? String(row[map.batting_style] ?? "").trim() : "",
-          bowling_style: map.bowling_style ? String(row[map.bowling_style] ?? "").trim() : "",
-          photo_url: map.photo_url ? String(row[map.photo_url] ?? "").trim() : "",
+          mobile: map["mobile"] ? String(row[map["mobile"]] ?? "").trim() : "",
+          city: map["city"] ? String(row[map["city"]] ?? "").trim() : "",
+          batting_style: map["batting_style"] ? String(row[map["batting_style"]] ?? "").trim() : "",
+          bowling_style: map["bowling_style"] ? String(row[map["bowling_style"]] ?? "").trim() : "",
+          photo_url: map["photo_url"] ? String(row[map["photo_url"]] ?? "").trim() : "",
         };
       })
       .filter((row): row is NonNullable<typeof row> => !!row);
@@ -1155,35 +1194,34 @@ function ImportExport({
       // Prevent accidental double-imports by matching existing name/mobile.
       const { data: existing, error: existingError } = await supabase
         .from("players")
-        .select("id,name,mobile")
+        .select("id,name,mobile,city")
         .eq("tournament_id", tournamentId);
 
       if (existingError) throw existingError;
 
       const existingKeys = new Set(
-        (existing ?? []).flatMap((p) => [
-          `name:${String(p.name ?? "").trim().toLowerCase()}`,
-          ...(p.mobile ? [`mobile:${String(p.mobile).trim()}`] : []),
-        ]),
+        (existing ?? []).map((p) => dedupeKey(p.name ?? "", p.mobile ?? "", p.city ?? "")),
       );
 
       const unique = new Map<string, (typeof previewRows)[number]>();
 
+      let dupes = 0;
       for (const p of previewRows) {
-        const nameKey = `name:${p.name.toLowerCase()}`;
-        const mobileKey = p.mobile ? `mobile:${p.mobile}` : "";
-        if (existingKeys.has(nameKey) || (mobileKey && existingKeys.has(mobileKey))) continue;
-
-        const rowKey = mobileKey || nameKey;
-        if (!unique.has(rowKey)) unique.set(rowKey, p);
+        const rowKey = dedupeKey(p.name, p.mobile, p.city);
+        if (existingKeys.has(rowKey) || unique.has(rowKey)) {
+          dupes++;
+          continue;
+        }
+        unique.set(rowKey, p);
       }
+      if (dupes) toast.info(`${dupes} duplicate rows skipped`);
 
       const payload = Array.from(unique.values()).map((p) => ({
         tournament_id: tournamentId,
         name: p.name,
         role: p.role,
         grade: p.grade || null,
-        base_price: 50, // auction default requested
+        base_price: p.base,
         mobile: p.mobile || null,
         city: p.city || null,
         batting_style: p.batting_style || null,
@@ -1231,7 +1269,7 @@ function ImportExport({
 
         <Input
           type="file"
-          accept=".xlsx,.xls,.csv"
+          accept=".pdf,.xlsx,.xls,.csv"
           disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -1322,7 +1360,7 @@ function ImportExport({
                     <div className="grid grid-cols-2 border-t border-border">
                       <div className="p-2.5">
                         <p className="text-[10px] uppercase text-muted-foreground">Base</p>
-                        <p className="font-extrabold text-accent">{formatMoney(50)}</p>
+                        <p className="font-extrabold text-accent">{formatMoney(p.base)}</p>
                       </div>
                       <div className="border-l border-border p-2.5">
                         <p className="text-[10px] uppercase text-muted-foreground">Status</p>
