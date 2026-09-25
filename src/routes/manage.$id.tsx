@@ -1162,7 +1162,7 @@ function ImportExport({
         const name = String(row[nameColumn] ?? "").trim();
         if (!name) return null;
 
-        const role = String(row[map["role"]] ?? "Batsman").trim() || "Batsman";
+        const role = (map["role"] ? String(row[map["role"]] ?? "").trim() : "") || "Batsman";
         const rawBase = map["base_price"] ? Number(String(row[map["base_price"]] ?? "").replace(/,/g, "")) : 50;
         const base = Number.isFinite(rawBase) && rawBase > 0 ? rawBase : 50;
 
