@@ -903,6 +903,12 @@ function ImportExport({
     team: teams.find((t) => t.id === p.sold_to_team_id)?.name ?? "",
   }));
 
+  const dedupeKey = (name: string, mobile: string, city: string) => {
+    const n = name.trim().toLowerCase().replace(/\s+/g, " ");
+    const m = mobile.replace(/\D/g, "");
+    return m ? `${n}|m:${m}` : `${n}|c:${city.trim().toLowerCase()}`;
+  };
+
   const normalized = (value: unknown) =>
     String(value ?? "")
       .trim()
@@ -1020,9 +1026,12 @@ function ImportExport({
 
     const output: Record<string, unknown>[] = [];
 
+    const headerSig = headerIndex >= 0 ? (matrix[headerIndex] ?? []).map((v) => cleanHeader(v)).join("|") : null;
     for (let rowIndex = headerIndex + 1; rowIndex < matrix.length; rowIndex++) {
       const row = matrix[rowIndex] ?? [];
       if (!row.some((value) => String(value ?? "").trim() !== "")) continue;
+      // Skip header rows repeated on later PDF pages / sheets.
+      if (headerSig && row.map((v) => cleanHeader(v)).join("|") === headerSig) continue;
 
       const object: Record<string, unknown> = {};
       headers.forEach((header, columnIndex) => {
