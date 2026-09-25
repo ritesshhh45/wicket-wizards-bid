@@ -1102,21 +1102,37 @@ function ImportExport({
     return parsed;
   };
 
+  const readPdf = async (file: File) => {
+    const { parsePdfToMatrix } = await import("@/lib/pdf-import");
+    const result = await parsePdfToMatrix(file);
+    const parsed = matrixToObjects(result.matrix);
+    if (!parsed.length) throw new Error("No player rows found in PDF.");
+    return { parsed, pages: result.pages };
+  };
+
   const handleFile = async (file: File) => {
     setBusy(true);
     try {
       const ext = file.name.toLowerCase().split(".").pop();
 
-      if (!["xlsx", "xls", "csv"].includes(ext ?? "")) {
-        throw new Error("For this importer use Excel (.xlsx/.xls) or CSV. PDF/DOC parsing is kept separate so player rows are never imported incorrectly.");
+      if (!["xlsx", "xls", "csv", "pdf"].includes(ext ?? "")) {
+        throw new Error("Use PDF, Excel (.xlsx/.xls) or CSV.");
       }
 
-      const parsed = ext === "csv" ? await readCsv(file) : await readSpreadsheet(file);
+      let pages = 1;
+      let parsed: Record<string, unknown>[];
+      if (ext === "pdf") {
+        const r = await readPdf(file);
+        parsed = r.parsed;
+        pages = r.pages;
+      } else {
+        parsed = ext === "csv" ? await readCsv(file) : await readSpreadsheet(file);
+      }
       const guessed = guessMapping(parsed);
 
       setRows(parsed);
       setMap(guessed);
-      setSourceFile(`${file.name} · ${parsed.length} source rows · all sheets merged`);
+      setSourceFile(`${file.name} · ${pages} page${pages > 1 ? "s" : ""} · ${parsed.length} rows`);
       toast.success(`${parsed.length} player rows found`);
     } catch (err) {
       setRows([]);
@@ -1169,16 +1185,13 @@ function ImportExport({
       // Prevent accidental double-imports by matching existing name/mobile.
       const { data: existing, error: existingError } = await supabase
         .from("players")
-        .select("id,name,mobile")
+        .select("id,name,mobile,city")
         .eq("tournament_id", tournamentId);
 
       if (existingError) throw existingError;
 
       const existingKeys = new Set(
-        (existing ?? []).flatMap((p) => [
-          `name:${String(p.name ?? "").trim().toLowerCase()}`,
-          ...(p.mobile ? [`mobile:${String(p.mobile).trim()}`] : []),
-        ]),
+        (existing ?? []).map((p) => dedupeKey(p.name ?? "", p.mobile ?? "", p.city ?? "")),
       );
 
       const unique = new Map<string, (typeof previewRows)[number]>();
