@@ -29,9 +29,6 @@ type Tournament = {
   status: string | null;
   tournament_type: string | null;
   auction_date: string | null;
-  owner_name?: string | null;
-  captain_access_id?: string | null;
-  captain_access_password?: string | null;
   captain_access_locked?: boolean | null;
 };
 
@@ -76,6 +73,11 @@ function JoinAuction() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  /*
+   * Public, credential-free listing. Reads from `public_tournaments`,
+   * a view that deliberately does NOT include captain_access_id /
+   * captain_access_password — those never reach the browser here.
+   */
   const {
     data: tournaments = [],
     isLoading,
@@ -85,11 +87,11 @@ function JoinAuction() {
     queryKey: ["join-auction-tournaments"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("tournaments")
+        .from("public_tournaments")
         .select(
-          "id,name,venue,banner_url,status,tournament_type,auction_date,owner_name,captain_access_id,captain_access_password,captain_access_locked",
+          "id,name,venue,banner_url,status,tournament_type,auction_date",
         )
-        .order("created_at", { ascending: false });
+        .order("id", { ascending: false });
 
       if (error) throw error;
       return (data ?? []) as Tournament[];
@@ -128,28 +130,28 @@ function JoinAuction() {
 
     try {
       /*
-       * We intentionally verify the credentials against the selected
-       * tournament. No tournament ID is accepted from the URL, so a captain
-       * cannot accidentally join another tournament's auction.
+       * Credential check happens INSIDE Postgres via this RPC.
+       * The password never travels to the client as data — only
+       * a match/no-match (empty result) comes back.
        */
-      const { data, error: tournamentError } = await supabase
-        .from("tournaments")
-        .select(
-          "id,name,venue,banner_url,status,tournament_type,auction_date,owner_name,captain_access_id,captain_access_password,captain_access_locked",
-        )
-        .eq("id", selectedTournamentId)
-        .eq("captain_access_id", auctionId.trim())
-        .eq("captain_access_password", password.trim())
-        .maybeSingle();
+      const { data, error: rpcError } = await supabase.rpc(
+        "verify_captain_access",
+        {
+          p_tournament_id: selectedTournamentId,
+          p_auction_id: auctionId.trim(),
+          p_password: password.trim(),
+        },
+      );
 
-      if (tournamentError) throw tournamentError;
+      if (rpcError) throw rpcError;
 
-      if (!data) {
+      const rows = (data ?? []) as Tournament[];
+      const tournament = rows[0];
+
+      if (!tournament) {
         setError("Invalid Auction ID or Password.");
         return;
       }
-
-      const tournament = data as Tournament;
 
       if (tournament.captain_access_locked) {
         setError(
@@ -213,33 +215,18 @@ function JoinAuction() {
     setBusy(true);
 
     try {
-      /*
-       * The common tournament password identifies the auction.
-       * The captain chooses the team assigned to them by the owner.
-       *
-       * The session is stored locally so the live route can distinguish a
-       * captain view from the owner/public view without changing the existing
-       * player-registration route.
-       */
       const session: CaptainSession = {
         tournamentId: verifiedTournament.id,
         teamId: team.id,
         teamName: team.name,
         captainName: team.captain_name ?? "",
-        ownerName:
-          team.owner_name ??
-          verifiedTournament.owner_name ??
-          "Tournament Owner",
+        ownerName: team.owner_name ?? "Tournament Owner",
         logoUrl: team.logo_url,
         joinedAt: new Date().toISOString(),
       };
 
       saveCaptainSession(session);
 
-      /*
-       * Keep the existing live route compatible with the project's previous
-       * captain_team query parameter while also storing the captain session.
-       */
       await navigate({
         to: "/live/$id",
         params: { id: verifiedTournament.id },
@@ -617,7 +604,7 @@ function JoinAuction() {
                         <p className="text-slate-500">
                           Owner:{" "}
                           <span className="font-bold text-slate-300">
-                            {team.owner_name || verifiedTournament.owner_name || "Tournament Owner"}
+                            {team.owner_name || "Tournament Owner"}
                           </span>
                         </p>
                       </div>
