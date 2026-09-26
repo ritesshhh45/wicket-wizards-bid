@@ -71,15 +71,15 @@ function Index() {
           HERO
       ====================================================== */}
 
-      <section className="relative min-h-[520px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm md:min-h-[620px]">
+      <section className="relative min-h-[520px] overflow-hidden rounded-3xl border border-amber-100 bg-amber-50 shadow-sm md:min-h-[620px]">
         <img
           src="/home-banner.png"
           alt="Cricket Auction Pro"
           className="absolute inset-0 h-full w-full object-cover object-center"
         />
 
-        {/* Light overlay so dark text stays readable over the photo */}
-        <div className="absolute inset-0 bg-gradient-to-t from-white via-white/70 to-white/10" />
+        {/* Warm overlay so dark text stays readable over the photo */}
+        <div className="absolute inset-0 bg-gradient-to-t from-amber-50 via-amber-50/70 to-amber-50/10" />
 
         <div className="relative z-10 flex min-h-[520px] items-end px-5 pb-8 sm:px-8 md:min-h-[620px] md:px-12 md:pb-12">
           <div className="max-w-2xl">
@@ -107,9 +107,9 @@ function Index() {
 
               <Link
                 to="/live"
-                className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition-all duration-200 hover:border-emerald-400 hover:bg-emerald-50"
+                className="inline-flex items-center justify-center rounded-xl border border-stone-300 bg-stone-50 px-5 py-3 text-sm font-bold text-stone-700 transition-all duration-200 hover:border-emerald-400 hover:bg-emerald-50"
               >
-                <Radio className="mr-2 size-4 text-emerald-600" />
+                <Radio className="mr-2 size-4 text-red-600" />
                 Watch Live
               </Link>
 
@@ -124,7 +124,7 @@ function Index() {
               {!user && (
                 <Link
                   to="/auth"
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition-all duration-200 hover:bg-slate-50"
+                  className="inline-flex items-center justify-center rounded-xl border border-stone-300 bg-stone-50 px-5 py-3 text-sm font-bold text-stone-700 transition-all duration-200 hover:bg-stone-100"
                 >
                   Login / Signup
                 </Link>
@@ -158,15 +158,15 @@ function Index() {
         ].map((f) => (
           <Card
             key={f.title}
-            className="border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-emerald-300"
+            className="border-stone-200 bg-stone-50 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-emerald-300"
           >
             <f.icon className="mb-3 size-6 text-emerald-600" />
 
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-bold text-stone-900">
               {f.title}
             </h3>
 
-            <p className="mt-1 text-sm leading-6 text-slate-500">
+            <p className="mt-1 text-sm leading-6 text-stone-500">
               {f.text}
             </p>
           </Card>
@@ -179,11 +179,11 @@ function Index() {
 
       <section className="mt-10">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-2xl font-extrabold text-slate-900">
+          <h2 className="font-display text-2xl font-extrabold text-stone-900">
             Browse tournaments
           </h2>
 
-          <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+          <div className="flex rounded-xl border border-stone-200 bg-stone-100 p-1">
             {[
               { k: "turf" as const, label: "🏟️ Turf" },
               { k: "open_ground" as const, label: "🌾 Open Ground" },
@@ -194,7 +194,7 @@ function Index() {
                 className={`rounded-lg px-4 py-2 text-sm font-bold transition-all duration-200 ${
                   typeTab === o.k
                     ? "bg-emerald-500 text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-900"
+                    : "text-stone-500 hover:text-stone-900"
                 }`}
               >
                 {o.label}
@@ -203,7 +203,7 @@ function Index() {
           </div>
         </div>
 
-        <p className="mb-4 text-sm leading-6 text-slate-500">
+        <p className="mb-4 text-sm leading-6 text-stone-500">
           {typeTab === "turf"
             ? "Turf format — squads of about 8 to 10 players."
             : "Open ground format — squads of about 15 to 16 players."}
@@ -212,7 +212,7 @@ function Index() {
         <div className="grid gap-4 md:grid-cols-3">
           {byType.map((t) => (
             <Link key={t.id} to="/live/$id" params={{ id: t.id }}>
-              <Card className="h-full overflow-hidden border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-emerald-300">
+              <Card className="h-full overflow-hidden border-stone-200 bg-stone-50 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-emerald-300">
                 {t.banner_url && (
                   <img
                     src={t.banner_url}
@@ -221,19 +221,25 @@ function Index() {
                   />
                 )}
 
-                <p className="font-bold text-slate-900">{t.name}</p>
+                <p className="font-bold text-stone-900">{t.name}</p>
 
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-stone-500">
                   {t.venue ?? "Venue TBA"}
                 </p>
 
                 {t.auction_date && (
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-stone-500">
                     {new Date(t.auction_date).toLocaleString("en-IN")}
                   </p>
                 )}
 
-                <p className="mt-3 text-xs font-bold uppercase tracking-wide text-emerald-600">
+                <p
+                  className={`mt-3 text-xs font-bold uppercase tracking-wide ${
+                    t.status === "auction_live"
+                      ? "text-red-600"
+                      : "text-emerald-600"
+                  }`}
+                >
                   {t.status === "auction_live"
                     ? "● Live now"
                     : t.status === "completed"
@@ -245,7 +251,7 @@ function Index() {
           ))}
 
           {byType.length === 0 && (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-stone-500">
               No {typeTab === "turf" ? "turf" : "open ground"} tournaments
               yet.
             </p>
@@ -258,12 +264,12 @@ function Index() {
       ====================================================== */}
 
       <section id="contact" className="mt-10">
-        <Card className="border-slate-200 bg-white shadow-sm">
-          <h2 className="font-display text-2xl font-extrabold text-slate-900">
+        <Card className="border-stone-200 bg-stone-50 shadow-sm">
+          <h2 className="font-display text-2xl font-extrabold text-stone-900">
             Contact us
           </h2>
 
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-stone-500">
             Need help setting up your tournament? We're one call away.
           </p>
 
