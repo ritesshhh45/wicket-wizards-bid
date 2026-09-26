@@ -157,16 +157,37 @@ function AuthPage() {
         }
 
         /*
-         * If there is no session after signup, Supabase is most
-         * likely requiring email confirmation.
+         * No session came back from signUp. This usually means
+         * "Confirm email" is ON in the Supabase project settings.
          *
-         * We DO NOT show a fake "check your email" success
-         * message because the desired application flow is
-         * direct authentication.
+         * As a fallback, try an immediate sign-in with the same
+         * credentials — this only succeeds once email confirmation
+         * is turned OFF in Supabase (Authentication → Providers →
+         * Email → Confirm email). If it's still ON, Supabase will
+         * reject this with "Email not confirmed" and we show a
+         * clear message — no code change can bypass a server-side
+         * confirmation requirement.
          */
-        throw new Error(
-          "Account created, but automatic login is unavailable. Email confirmation is enabled in the Supabase project."
-        );
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+
+        if (signInError) {
+          throw new Error(
+            "Account created, but automatic login is unavailable. " +
+              "Turn OFF \"Confirm email\" in Supabase → Authentication → " +
+              "Providers → Email, then try signing up again."
+          );
+        }
+
+        toast.success("Account created successfully!");
+
+        await navigate({
+          to: "/tournaments",
+        });
+
+        return;
       }
 
       /*

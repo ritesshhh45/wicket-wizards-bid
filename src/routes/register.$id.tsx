@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2,
   ShieldCheck,
-  Upload,
-  UserRound,
+  Camera,
   AlertCircle,
 } from "lucide-react";
 
@@ -64,10 +63,6 @@ function RegisterPage() {
     name: "",
     role: "Batsman",
     mobile: "",
-    city: "",
-    batting_style: "",
-    bowling_style: "",
-    previous_team: "",
   });
 
   /* =========================================================
@@ -100,10 +95,7 @@ function RegisterPage() {
      PLAYER COUNT
   ========================================================= */
 
-  const {
-    data: playerCount,
-    refetch: refetchPlayerCount,
-  } = useQuery({
+  const { data: playerCount, refetch: refetchPlayerCount } = useQuery({
     queryKey: ["register-player-count", id],
 
     queryFn: async () => {
@@ -127,12 +119,7 @@ function RegisterPage() {
   const roles =
     categories.length > 0
       ? categories
-      : [
-          "Batsman",
-          "Bowler",
-          "All-Rounder",
-          "Wicketkeeper",
-        ];
+      : ["Batsman", "Bowler", "All-Rounder", "Wicketkeeper"];
 
   /* =========================================================
      PHOTO UPLOAD
@@ -171,9 +158,7 @@ function RegisterPage() {
       console.error("PHOTO UPLOAD ERROR:", error);
 
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Photo upload failed.",
+        error instanceof Error ? error.message : "Photo upload failed.",
       );
     } finally {
       setPhotoUploading(false);
@@ -197,7 +182,6 @@ function RegisterPage() {
 
     const name = form.name.trim();
     const mobile = normalizeMobile(form.mobile);
-    const city = form.city.trim();
 
     if (!name) {
       toast.error("Please enter your full name.");
@@ -219,9 +203,6 @@ function RegisterPage() {
       return;
     }
 
-    /*
-     * Prevent accidental double click / repeated submission
-     */
     if (busy) return;
 
     setBusy(true);
@@ -229,16 +210,11 @@ function RegisterPage() {
     try {
       /* =====================================================
          LOCAL REGISTRATION LOCK
-
-         Prevents the same browser from submitting the same
-         player twice by repeated clicks.
       ===================================================== */
 
-      const lockKey =
-        `auction-registration:${id}:${mobile}`;
+      const lockKey = `auction-registration:${id}:${mobile}`;
 
-      const existingLock =
-        window.localStorage.getItem(lockKey);
+      const existingLock = window.localStorage.getItem(lockKey);
 
       if (existingLock) {
         toast.error(
@@ -251,29 +227,21 @@ function RegisterPage() {
 
       /* =====================================================
          DUPLICATE CHECK
-
-         Same tournament + same mobile = one player only.
       ===================================================== */
 
-      const {
-        data: existingPlayer,
-        error: duplicateCheckError,
-      } = await supabase
-        .from("players")
-        .select("id,name,status,mobile")
-        .eq("tournament_id", id)
-        .eq("mobile", mobile)
-        .maybeSingle();
+      const { data: existingPlayer, error: duplicateCheckError } =
+        await supabase
+          .from("players")
+          .select("id,name,status,mobile")
+          .eq("tournament_id", id)
+          .eq("mobile", mobile)
+          .maybeSingle();
 
       if (duplicateCheckError) {
-        console.error(
-          "DUPLICATE CHECK ERROR:",
-          duplicateCheckError,
-        );
+        console.error("DUPLICATE CHECK ERROR:", duplicateCheckError);
 
         throw new Error(
-          duplicateCheckError.message ||
-            "Unable to verify registration.",
+          duplicateCheckError.message || "Unable to verify registration.",
         );
       }
 
@@ -286,23 +254,13 @@ function RegisterPage() {
         return;
       }
 
-      /*
-       * Set local lock immediately before insert.
-       * If insert fails, remove it again.
-       */
-      window.localStorage.setItem(
-        lockKey,
-        new Date().toISOString(),
-      );
+      window.localStorage.setItem(lockKey, new Date().toISOString());
 
       /* =====================================================
          GET PLAYER NUMBER
       ===================================================== */
 
-      const {
-        count: currentCount,
-        error: countError,
-      } = await supabase
+      const { count: currentCount, error: countError } = await supabase
         .from("players")
         .select("id", {
           count: "exact",
@@ -314,83 +272,40 @@ function RegisterPage() {
         window.localStorage.removeItem(lockKey);
 
         throw new Error(
-          countError.message ||
-            "Unable to generate player number.",
+          countError.message || "Unable to generate player number.",
         );
       }
 
-      const nextNumber =
-        (currentCount ?? 0) + 1;
+      const nextNumber = (currentCount ?? 0) + 1;
 
       /* =====================================================
          CREATE PLAYER
-
-         Player directly enters auction pool.
-         No owner approval required.
       ===================================================== */
 
-      const { data: insertedPlayer, error: insertError } =
-        await supabase
-          .from("players")
-          .insert({
-            tournament_id: id,
-
-            name,
-
-            role: form.role,
-
-            mobile,
-
-            city,
-
-            batting_style:
-              form.batting_style.trim(),
-
-            bowling_style:
-              form.bowling_style.trim(),
-
-            previous_team:
-              form.previous_team.trim(),
-
-            photo_url: photo,
-
-            /*
-             * Tournament base price logic can later
-             * calculate the actual base price.
-             */
-            base_price: 0,
-
-            /*
-             * IMPORTANT:
-             * Player immediately appears in auction.
-             */
-            status: "available",
-          })
-          .select("id,name")
-          .maybeSingle();
-
-      /* =====================================================
-         INSERT ERROR
-      ===================================================== */
+      const { data: insertedPlayer, error: insertError } = await supabase
+        .from("players")
+        .insert({
+          tournament_id: id,
+          name,
+          role: form.role,
+          mobile,
+          city: "",
+          batting_style: "",
+          bowling_style: "",
+          previous_team: "",
+          photo_url: photo,
+          base_price: 0,
+          status: "available",
+        })
+        .select("id,name")
+        .maybeSingle();
 
       if (insertError) {
-        console.error(
-          "PLAYER INSERT ERROR:",
-          insertError,
-        );
+        console.error("PLAYER INSERT ERROR:", insertError);
 
         window.localStorage.removeItem(lockKey);
 
-        /*
-         * PostgreSQL duplicate key protection.
-         *
-         * If a unique constraint exists on
-         * tournament_id + mobile, this catches it.
-         */
-        if (
-          (insertError as { code?: string }).code ===
-          "23505"
-        ) {
+        if ((insertError as { code?: string }).code === "23505") {
           toast.error(
             "This mobile number is already registered for this tournament.",
           );
@@ -399,17 +314,14 @@ function RegisterPage() {
         }
 
         throw new Error(
-          insertError.message ||
-            "Registration failed. Please try again.",
+          insertError.message || "Registration failed. Please try again.",
         );
       }
 
       if (!insertedPlayer) {
         window.localStorage.removeItem(lockKey);
 
-        throw new Error(
-          "Player was not created. Please try again.",
-        );
+        throw new Error("Player was not created. Please try again.");
       }
 
       /* =====================================================
@@ -417,21 +329,14 @@ function RegisterPage() {
       ===================================================== */
 
       setRegisteredName(name);
-
       setPlayerNumber(nextNumber);
-
       setDone(true);
 
       await refetchPlayerCount();
 
-      toast.success(
-        "Player registered successfully!",
-      );
+      toast.success("Player registered successfully!");
     } catch (error) {
-      console.error(
-        "REGISTRATION ERROR:",
-        error,
-      );
+      console.error("REGISTRATION ERROR:", error);
 
       toast.error(
         error instanceof Error
@@ -508,8 +413,8 @@ function RegisterPage() {
           </h1>
 
           <p className="mt-3 text-sm text-muted-foreground">
-            This registration link may be invalid or
-            the tournament may have been removed.
+            This registration link may be invalid or the tournament may
+            have been removed.
           </p>
         </Card>
       </div>
@@ -526,7 +431,6 @@ function RegisterPage() {
         <div className="mx-auto max-w-lg">
           <Card className="overflow-hidden border-accent/30">
             <div className="bg-gradient-to-br from-accent/20 via-background to-primary/10 p-8 text-center">
-
               <div className="mx-auto grid size-20 place-items-center rounded-full bg-accent/15">
                 <CheckCircle2 className="size-11 text-accent" />
               </div>
@@ -546,41 +450,21 @@ function RegisterPage() {
                   </span>
 
                   <span className="font-display text-3xl font-black text-accent">
-                    #
-                    {String(playerNumber).padStart(
-                      2,
-                      "0",
-                    )}
+                    #{String(playerNumber).padStart(2, "0")}
                   </span>
                 </div>
               )}
 
               <p className="mt-5 text-sm leading-6 text-muted-foreground">
-                Your player profile has been successfully
-                added to the auction player pool.
+                Your player profile has been successfully added to the
+                auction player pool.
               </p>
 
               <div className="mt-6 rounded-xl border border-accent/20 bg-accent/5 p-4">
                 <div className="flex items-center justify-center gap-2 text-sm font-bold text-accent">
                   <ShieldCheck className="size-4" />
-
                   Player is ready for auction
                 </div>
-
-                <p className="mt-2 text-xs text-muted-foreground">
-                  The auction owner can now see your
-                  player card when the auction starts.
-                </p>
-              </div>
-
-              <div className="mt-5 rounded-xl border border-border bg-surface-2 p-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Tournament
-                </p>
-
-                <p className="mt-1 font-bold">
-                  {tournament.name}
-                </p>
               </div>
             </div>
           </Card>
@@ -594,66 +478,61 @@ function RegisterPage() {
   ========================================================= */
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
-      <div className="mx-auto max-w-2xl">
-
+    <div className="min-h-screen bg-background px-4 py-10">
+      <div className="mx-auto max-w-md">
         {/* HEADER */}
-
         <div className="mb-6 text-center">
-
-          {tournament.banner_url && (
-            <img
-              src={tournament.banner_url}
-              alt=""
-              className="mb-5 h-40 w-full rounded-2xl object-cover"
-            />
-          )}
-
-          <div className="mx-auto mb-3 grid size-14 place-items-center rounded-2xl bg-primary/10">
-            <UserRound className="size-7 text-primary" />
-          </div>
-
-          <p className="text-xs font-bold uppercase tracking-[0.25em] text-accent">
-            Player Registration
-          </p>
-
-          <h1 className="mt-2 font-display text-3xl font-black md:text-4xl">
+          <h1 className="font-display text-2xl font-black md:text-3xl">
             {tournament.name}
           </h1>
 
-          <p className="mt-2 text-sm text-muted-foreground">
-            {tournament.venue ?? "Venue TBA"} ·{" "}
-            {tournament.tournament_type ===
-            "turf"
-              ? "Turf Tournament"
-              : "Open Ground Tournament"}
-          </p>
-
-          <div className="mt-4 inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-4 py-2 text-xs font-bold text-accent">
+          <div className="mt-3 inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-4 py-1.5 text-xs font-bold text-accent">
             {playerCount ?? 0} players registered
           </div>
         </div>
 
         {/* FORM */}
+        <Card className="p-6">
+          <div className="flex flex-col items-center gap-5">
+            {/* PHOTO — circular, top */}
+            <label
+              className={`relative flex size-28 items-center justify-center rounded-full border-2 border-dashed border-border bg-surface-2 transition ${
+                busy
+                  ? "cursor-not-allowed opacity-70"
+                  : "cursor-pointer hover:border-accent hover:bg-accent/5"
+              }`}
+            >
+              {photo ? (
+                <img
+                  src={photo}
+                  alt="Player preview"
+                  className="size-28 rounded-full object-cover ring-2 ring-accent/40"
+                />
+              ) : (
+                <Camera className="size-8 text-muted-foreground" />
+              )}
 
-        <Card className="overflow-hidden">
+              <span className="absolute -bottom-1 -right-1 grid size-8 place-items-center rounded-full bg-accent text-accent-foreground shadow">
+                <Camera className="size-4" />
+              </span>
 
-          <div className="mb-6">
-            <h2 className="font-display text-xl font-bold">
-              Create Your Player Card
-            </h2>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={busy || photoUploading}
+                className="hidden"
+                onChange={(event) => void handlePhotoUpload(event)}
+              />
+            </label>
 
-            <p className="mt-1 text-sm text-muted-foreground">
-              Fill your details carefully. Your information
-              will be used during the live auction.
-            </p>
-          </div>
-
-          <div className="grid gap-5 sm:grid-cols-2">
+            {photoUploading && (
+              <p className="-mt-3 text-xs font-semibold text-accent">
+                Uploading photo…
+              </p>
+            )}
 
             {/* NAME */}
-
-            <div>
+            <div className="w-full">
               <Label>Full name *</Label>
 
               <Input
@@ -661,17 +540,13 @@ function RegisterPage() {
                 value={form.name}
                 disabled={busy}
                 onChange={(event) =>
-                  setForm({
-                    ...form,
-                    name: event.target.value,
-                  })
+                  setForm({ ...form, name: event.target.value })
                 }
               />
             </div>
 
             {/* MOBILE */}
-
-            <div>
+            <div className="w-full">
               <Label>Mobile number *</Label>
 
               <Input
@@ -684,182 +559,33 @@ function RegisterPage() {
                 onChange={(event) =>
                   setForm({
                     ...form,
-                    mobile: normalizeMobile(
-                      event.target.value,
-                    ),
+                    mobile: normalizeMobile(event.target.value),
                   })
                 }
               />
             </div>
 
             {/* ROLE */}
-
-            <div>
+            <div className="w-full">
               <Label>Playing role *</Label>
 
               <Select
                 value={form.role}
                 disabled={busy}
                 onChange={(event) =>
-                  setForm({
-                    ...form,
-                    role: event.target.value,
-                  })
+                  setForm({ ...form, role: event.target.value })
                 }
               >
                 {roles.map((role) => (
-                  <option
-                    key={role}
-                    value={role}
-                  >
+                  <option key={role} value={role}>
                     {role}
                   </option>
                 ))}
               </Select>
             </div>
-
-            {/* CITY */}
-
-            <div>
-              <Label>City</Label>
-
-              <Input
-                placeholder="Your city"
-                value={form.city}
-                disabled={busy}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    city: event.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* BATTING */}
-
-            <div>
-              <Label>Batting style</Label>
-
-              <Input
-                placeholder="e.g. Right Hand"
-                value={form.batting_style}
-                disabled={busy}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    batting_style:
-                      event.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* BOWLING */}
-
-            <div>
-              <Label>Bowling style</Label>
-
-              <Input
-                placeholder="e.g. Right Arm Fast"
-                value={form.bowling_style}
-                disabled={busy}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    bowling_style:
-                      event.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* PREVIOUS TEAM */}
-
-            <div className="sm:col-span-2">
-              <Label>Previous team</Label>
-
-              <Input
-                placeholder="Optional"
-                value={form.previous_team}
-                disabled={busy}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    previous_team:
-                      event.target.value,
-                  })
-                }
-              />
-            </div>
-
-            {/* PHOTO */}
-
-            <div className="sm:col-span-2">
-
-              <Label>Player photo *</Label>
-
-              <label
-                className={`mt-1 flex min-h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface-2 p-5 text-center transition ${
-                  busy
-                    ? "cursor-not-allowed opacity-70"
-                    : "cursor-pointer hover:border-accent hover:bg-accent/5"
-                }`}
-              >
-
-                {photo ? (
-                  <>
-                    <img
-                      src={photo}
-                      alt="Player preview"
-                      className="size-28 rounded-2xl object-cover ring-2 ring-accent/40"
-                    />
-
-                    <p className="mt-3 text-sm font-bold text-accent">
-                      Photo uploaded ✓
-                    </p>
-
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Click to change photo
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="grid size-14 place-items-center rounded-full bg-primary/10">
-                      <Upload className="size-6 text-primary" />
-                    </div>
-
-                    <p className="mt-3 text-sm font-bold">
-                      Upload player photo
-                    </p>
-
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      JPG, PNG or WEBP · Max 5MB
-                    </p>
-                  </>
-                )}
-
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  disabled={busy || photoUploading}
-                  className="hidden"
-                  onChange={(event) =>
-                    void handlePhotoUpload(event)
-                  }
-                />
-              </label>
-
-              {photoUploading && (
-                <p className="mt-2 text-xs font-semibold text-accent">
-                  Uploading photo…
-                </p>
-              )}
-            </div>
           </div>
 
           {/* SUBMIT */}
-
           <Button
             className="mt-6 w-full py-3 text-sm font-black"
             disabled={
@@ -877,60 +603,8 @@ function RegisterPage() {
                 ? "Uploading photo…"
                 : "Register for Auction"}
           </Button>
-
-          <div className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
-            <ShieldCheck className="size-4 text-accent" />
-
-            Your player details are securely submitted
-            to this tournament.
-          </div>
         </Card>
-
-        {/* INFO */}
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-
-          <InfoCard
-            title="Photo"
-            text="Your photo appears on the auction player card."
-          />
-
-          <InfoCard
-            title="Player Card"
-            text="Your card is created automatically after registration."
-          />
-
-          <InfoCard
-            title="Live Auction"
-            text="The auction owner can select your card during bidding."
-          />
-
-        </div>
       </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   INFO CARD
-========================================================= */
-
-function InfoCard({
-  title,
-  text,
-}: {
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <p className="text-sm font-bold">
-        {title}
-      </p>
-
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-        {text}
-      </p>
     </div>
   );
 }
