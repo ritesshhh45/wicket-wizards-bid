@@ -80,6 +80,13 @@ export type Database = {
             foreignKeyName: "auction_events_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "public_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auction_events_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -131,6 +138,13 @@ export type Database = {
             columns: ["current_player_id"]
             isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auction_sessions_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "public_tournaments"
             referencedColumns: ["id"]
           },
           {
@@ -202,6 +216,13 @@ export type Database = {
             foreignKeyName: "bids_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "public_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bids_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -243,6 +264,13 @@ export type Database = {
             foreignKeyName: "notifications_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "public_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -280,6 +308,13 @@ export type Database = {
           utr_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "public_tournaments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_tournament_id_fkey"
             columns: ["tournament_id"]
@@ -381,6 +416,13 @@ export type Database = {
             foreignKeyName: "players_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "public_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "players_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -473,6 +515,13 @@ export type Database = {
             foreignKeyName: "team_transactions_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "public_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_transactions_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -529,6 +578,13 @@ export type Database = {
             foreignKeyName: "teams_tournament_id_fkey"
             columns: ["tournament_id"]
             isOneToOne: false
+            referencedRelation: "public_tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
@@ -540,6 +596,9 @@ export type Database = {
           banner_url: string | null
           base_price_tiers: Json
           bid_increment_rules: Json
+          captain_access_id: string | null
+          captain_access_locked: boolean
+          captain_access_password: string | null
           categories: Json
           category_limits: Json
           config_locked: boolean
@@ -563,6 +622,9 @@ export type Database = {
           banner_url?: string | null
           base_price_tiers?: Json
           bid_increment_rules?: Json
+          captain_access_id?: string | null
+          captain_access_locked?: boolean
+          captain_access_password?: string | null
           categories?: Json
           category_limits?: Json
           config_locked?: boolean
@@ -586,6 +648,9 @@ export type Database = {
           banner_url?: string | null
           base_price_tiers?: Json
           bid_increment_rules?: Json
+          captain_access_id?: string | null
+          captain_access_locked?: boolean
+          captain_access_password?: string | null
           categories?: Json
           category_limits?: Json
           config_locked?: boolean
@@ -626,7 +691,36 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_tournaments: {
+        Row: {
+          auction_date: string | null
+          banner_url: string | null
+          id: string | null
+          name: string | null
+          status: Database["public"]["Enums"]["tournament_status"] | null
+          tournament_type: string | null
+          venue: string | null
+        }
+        Insert: {
+          auction_date?: string | null
+          banner_url?: string | null
+          id?: string | null
+          name?: string | null
+          status?: Database["public"]["Enums"]["tournament_status"] | null
+          tournament_type?: string | null
+          venue?: string | null
+        }
+        Update: {
+          auction_date?: string | null
+          banner_url?: string | null
+          id?: string | null
+          name?: string | null
+          status?: Database["public"]["Enums"]["tournament_status"] | null
+          tournament_type?: string | null
+          venue?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       claim_team_invite: { Args: { p_token: string }; Returns: Json }
@@ -689,6 +783,23 @@ export type Database = {
         Returns: Json
       }
       undo_last_bid: { Args: { p_player_id: string }; Returns: Json }
+      verify_captain_access: {
+        Args: {
+          p_auction_id: string
+          p_password: string
+          p_tournament_id: string
+        }
+        Returns: {
+          auction_date: string
+          banner_url: string
+          captain_access_locked: boolean
+          id: string
+          name: string
+          status: string
+          tournament_type: string
+          venue: string
+        }[]
+      }
     }
     Enums: {
       app_role: "super_admin" | "tournament_owner" | "team_owner" | "viewer"
