@@ -14,6 +14,7 @@ import { Route as AddPlayerRouteImport } from './routes/add-player'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as JoinRouteImport } from './routes/join'
 import { Route as JoinAuctionRouteImport } from './routes/join-auction'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LiveIndexRouteImport } from './routes/live.index'
@@ -50,6 +51,11 @@ const AuthRoute = AuthRouteImport.update({
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinRoute = JoinRouteImport.update({
+  id: '/join',
+  path: '/join',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JoinAuctionRoute = JoinAuctionRouteImport.update({
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/join': typeof JoinRoute
   '/join-auction': typeof JoinAuctionRoute
   '/profile': typeof ProfileRoute
   '/live/$id': typeof LiveIdRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/join': typeof JoinRoute
   '/join-auction': typeof JoinAuctionRoute
   '/profile': typeof ProfileRoute
   '/live/$id': typeof LiveIdRoute
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/join': typeof JoinRoute
   '/join-auction': typeof JoinAuctionRoute
   '/profile': typeof ProfileRoute
   '/live/$id': typeof LiveIdRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/contact'
+    | '/join'
     | '/join-auction'
     | '/profile'
     | '/live/$id'
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/contact'
+    | '/join'
     | '/join-auction'
     | '/profile'
     | '/live/$id'
@@ -217,6 +228,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/contact'
+    | '/join'
     | '/join-auction'
     | '/profile'
     | '/live/$id'
@@ -237,6 +249,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
   ContactRoute: typeof ContactRoute
+  JoinRoute: typeof JoinRoute
   JoinAuctionRoute: typeof JoinAuctionRoute
   ProfileRoute: typeof ProfileRoute
   LiveIdRoute: typeof LiveIdRoute
@@ -286,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join': {
+      id: '/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof JoinRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/join-auction': {
@@ -381,6 +401,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
   ContactRoute: ContactRoute,
+  JoinRoute: JoinRoute,
   JoinAuctionRoute: JoinAuctionRoute,
   ProfileRoute: ProfileRoute,
   LiveIdRoute: LiveIdRoute,
