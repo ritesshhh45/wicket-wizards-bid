@@ -1,7 +1,7 @@
 import type { ReactNode, InputHTMLAttributes, SelectHTMLAttributes, ButtonHTMLAttributes } from "react";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`card-surface p-5 ${className}`}>{children}</div>;
+  return <div className={`card-surface p-5 transition-[border-color,box-shadow,transform] duration-200 ${className}`}>{children}</div>;
 }
 
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
@@ -22,7 +22,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...rest}
-      className={`w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary ${className}`}
+      className={`w-full rounded-lg border border-input bg-surface px-3 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 ${className}`}
     />
   );
 }
@@ -32,7 +32,7 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...rest}
-      className={`w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary ${className}`}
+      className={`w-full rounded-lg border border-input bg-surface px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 ${className}`}
     />
   );
 }
@@ -45,14 +45,14 @@ export function Button({ variant = "primary", className = "", ...rest }: BtnProp
   const styles: Record<string, string> = {
     primary: "bg-primary text-primary-foreground hover:opacity-90",
     accent: "bg-accent text-accent-foreground hover:opacity-90",
-    ghost: "border border-border bg-surface text-foreground hover:bg-surface-2",
+    ghost: "border border-border bg-transparent text-foreground hover:border-primary/50 hover:bg-surface-2",
     danger: "bg-destructive text-destructive-foreground hover:opacity-90",
     warning: "bg-warning text-warning-foreground hover:opacity-90",
   };
   return (
     <button
       {...rest}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${styles[variant]} ${className}`}
+      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-200 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 ${styles[variant]} ${className}`}
     />
   );
 }
