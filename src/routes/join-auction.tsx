@@ -231,6 +231,9 @@ function JoinAuction() {
         to: "/live/$id",
         params: { id: verifiedTournament.id },
         search: {
+          role: "captain",
+          access_id: auctionId.trim(),
+          access_password: password.trim(),
           captain_team: team.id,
         } as never,
       });
